@@ -79,3 +79,12 @@ def test_quality_scoring_distinguishes_present_valid_verified_stale():
     assert field_status(row2, now)["quality"] == 1.0
     sc = score_company({"email": row, "phone": {**row, "status": "not_found", "value": None}}, ["email", "phone"], now)
     assert sc["completeness"] == 0.5 and sc["verified_share"] == 0.0
+
+
+def test_title_name_heuristic_is_conservative():
+    f = lambda t: [c.value for c in extract_page(f"<html><head><title>{t}</title></head><body>x</body></html>",
+                                                  "https://x.com/", "home", "x.com").candidates if c.field == "company_name"]
+    assert f("Home | Acme Plumbing") == ["Acme Plumbing"]
+    assert f("Welcome - Birch Labs") == ["Birch Labs"]
+    assert f("Plumbing in Austin | Best Prices") == []          # two unknown segments, none matches the domain
+    assert f("Services") == []                                   # single segment is not trusted

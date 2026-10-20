@@ -127,6 +127,7 @@ class Enricher:
                 and ident.start_url.startswith("https://") and "DNS" not in home.error:
             home = await self.fetcher.fetch("http://" + ident.start_url[len("https://"):], run, budget)
         t2.ms += (time.monotonic() - t0) * 1000
+        t2.requests = run.http_requests
         fetched.add(home.url)
         if not home.ok:
             return await self._handle_home_failure(cid, ident, requested, plan, run, home, t_start, budget, job_id, row_index)
@@ -185,10 +186,12 @@ class Enricher:
         if (self.browser and self.s.browser_enabled and home_js_hint
                 and any(FIELDS[f].weight >= MIN_WEIGHT_FOR_EXTRA_PAGE for f in remaining)):
             t4 = run.tier("tier4_browser")
-            t4.attempted = True
             t0 = time.monotonic()
+            before = run.http_requests
             rr = await self.browser.render(homepage_url, run, budget)
+            t4.attempted = rr.error not in ("browser_unavailable", "budget")   # didn't run => not an attempt
             t4.ms = (time.monotonic() - t0) * 1000
+            t4.requests = run.http_requests - before
             if rr.html:
                 rex = _extract_inline(rr.html, homepage_url, ident.key)
                 picks_src += [_tag(c, "tier4_browser") for c in rex.candidates]

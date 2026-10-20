@@ -55,6 +55,8 @@ LINK_KINDS = {
     "team": ("team", "leadership", "people", "management"),
     "services": ("services", "solutions", "what-we-do", "products", "capabilities", "offerings"),
 }
+GENERIC_TITLE_SEGMENTS = {"home", "homepage", "welcome", "index", "official site", "official website", "contact",
+                          "contact us", "about", "about us", "main", "start"}
 SKIP_EXT = re.compile(r"\.(pdf|jpe?g|png|gif|svg|webp|zip|docx?|xlsx?|pptx?|mp4|mp3|css|js|xml|ico)(\?|$)", re.I)
 
 
@@ -291,13 +293,19 @@ def extract_page(html: str, url: str, page_kind: str, site_key: str) -> PageExtr
             cands.append(Candidate("logo_url", ogimg, "meta", url))
 
     res.title = clean(soup.title.string if soup.title and soup.title.string else "", 200)
-    # title -> name, only if one segment matches the domain label (avoids "Home | Acme" ambiguity)
+    # title -> name. Two defensible cases: (a) exactly one segment survives after dropping generic words
+    # ("Home | Acme Plumbing"); (b) one segment matches the domain label ("Plumbing in Austin | Acme").
     if res.title:
+        segs = [x for x in re.split(r"\s*[|\u2013\u2014:\u00b7]\s*|\s+-\s+", res.title) if x]
         label = name_slug(site_key.split(".")[0])
-        for seg in re.split(r"\s*[|–—:·]\s*|\s+-\s+", res.title):
-            if label and len(label) >= 3 and label in name_slug(seg) and 2 <= len(seg) <= 80:
-                cands.append(Candidate("company_name", clean(seg, 120), "title", url))
-                break
+        keep = [x for x in segs if x.lower() not in GENERIC_TITLE_SEGMENTS]
+        chosen = None
+        if len(segs) >= 2 and len(keep) == 1 and 2 <= len(keep[0]) <= 80:
+            chosen = keep[0]
+        else:
+            chosen = next((x for x in segs if label and len(label) >= 3 and label in name_slug(x) and 2 <= len(x) <= 80), None)
+        if chosen:
+            cands.append(Candidate("company_name", clean(chosen, 120), "title", url))
 
     # links: mailto / tel / social / cloudflare-protected emails
     social_seen: dict[str, set] = {}
