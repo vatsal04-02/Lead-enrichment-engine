@@ -62,7 +62,7 @@ class PilotError(SystemExit):
 # ------------------------------------------------------------------ sample validation (no network)
 def load_sample(path: str) -> list[dict]:
     with open(path, newline="", encoding="utf-8-sig") as f:
-        rd = csv.DictReader(f)
+        rd = csv.DictReader(line for line in f if not line.lstrip().startswith("#"))
         missing = [c for c in REQUIRED_COLS if c not in (rd.fieldnames or [])]
         if missing:
             raise PilotError(f"sample file must have columns {REQUIRED_COLS}; missing {missing}")

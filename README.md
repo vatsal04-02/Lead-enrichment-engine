@@ -54,7 +54,7 @@ Requirements: Python ≥ 3.11, PostgreSQL ≥ 13.
 python -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev,browser,ai]'            # browser/ai extras are optional
 scripts/dev_postgres.sh                        # throwaway local cluster on :55432 (dev only; fsync off)
-cp .env.example .env                           # then edit; set LE_USER_AGENT before touching real sites
+cp .env.example .env                           # then edit; LE_USER_AGENT is REQUIRED (the engine refuses the placeholder)
 python -m leadengine init-db                   # schema is also applied automatically on startup
 ```
 
@@ -109,6 +109,28 @@ Without AI/browser configured the engine runs Tiers 1–3 and reports fields the
   `<f>`, `<f>__source_url`, `<f>__status` (e.g. `present+source_attributed+format_valid+verified`, or `missing`).
   Scraped values are neutralised against spreadsheet formula injection. Only requested fields are enriched/exported.
 * Export reads the *current* stored record for each row's domain; re-export after a refresh shows refreshed values.
+* Spreadsheet formula injection: scraped values and error text are always neutralised (leading `= @ + -`/tab/CR, also after
+  whitespace). Your **original columns are echoed unchanged** by default; add `?safe=true` (API) to neutralise them too.
+
+## Live pilot (20–50 hand-picked, permitted sites)
+
+`benchmarks/pilot.py` is the only supported way to contact real sites for evaluation. It cannot be pointed at arbitrary
+websites (see its docstring for every guard rail). Steps, all on your own machine:
+
+```bash
+createdb enrich_pilot                                   # database name MUST end in _pilot (the pilot truncates it with --reset)
+cp benchmarks/pilot_sample.template.csv my_sites.csv    # fill in 20-50 rows: domain, name, permission_basis, reviewed_by
+python -m benchmarks.pilot validate --sample my_sites.csv                # offline check, no requests
+export LE_USER_AGENT="YourBot/1.0 (+https://your.site/bot; ops@your.site)"
+export LE_DATABASE_URL=postgresql://USER@HOST/enrich_pilot
+python -m benchmarks.pilot run --sample my_sites.csv --confirm-permitted --confirm-sites <N> --reset
+#   optional: --allow-browser --browser-executable /path/to/chromium   --ai (needs ANTHROPIC_API_KEY) --ai-price-in X --ai-price-out Y
+# open benchmarks/results/pilot-<ts>-audit.csv, fill the `verdict` column (correct|incorrect|unsure) by checking each source_url
+python -m benchmarks.pilot score --audit benchmarks/results/pilot-<ts>-audit.csv
+```
+
+Outputs next to the report: `*-provenance.csv` (every value with source URL/method/time), `*-fetch-log.jsonl` (every request),
+`*-audit.csv` (stratified, seeded sample for the human check). Every metric is labelled MEASURED / ESTIMATED / UNKNOWN.
 
 ## Jobs, recovery, budgets
 
@@ -128,6 +150,13 @@ Without AI/browser configured the engine runs Tiers 1–3 and reports fields the
   Budgets are enforced exactly by the single worker holding the job lease.
 * Backpressure: a bounded claim→worker queue (`LE_QUEUE_SIZE`), exactly `LE_GLOBAL_CONCURRENCY` consumer tasks, claiming pauses
   when the DB pool is >90% busy or ≥80% of recent results are transient failures (exponentially increasing delay).
+
+## Database and migrations
+
+`schema.sql` is the idempotent baseline; forward-only numbered migrations live in `leadengine/migrations/*.sql` and are recorded in
+`schema_migrations` (applied exactly once, under an advisory lock, in one transaction — safe when several processes start at once).
+Migrations must be additive; destructive changes (drops/rewrites) are never applied automatically. Cache/log tables
+(`http_cache`, `extraction_cache`, `enrichment_runs`, `fetch_log`) have **no retention job yet** (see the Stage-4 report).
 
 ## Caching and freshness
 
@@ -151,15 +180,32 @@ Without AI/browser configured the engine runs Tiers 1–3 and reports fields the
   dials **the validated IP**, so DNS rebinding between check and connect cannot happen. Redirects are followed manually and
   every hop is re-validated (and robots-checked). Response size cap (decoded, so gzip bombs are bounded), redirect cap,
   timeouts, content-type allow-list (HTML/XHTML/plain).
-* Browser tier: Chromium never touches the network directly; every request is intercepted and fulfilled by the same guarded
-  fetcher (images/fonts/media/websockets aborted; request-count and byte caps; service workers blocked).
+* Browser tier: HTTP(S) requests from Chromium are intercepted and fulfilled by the same guarded fetcher (images/fonts/media
+  aborted; request-count and byte caps; service workers blocked). **WebSockets bypass request interception**, so every
+  WebSocket is refused (`route_web_socket`), Chromium's own DNS is disabled (`--host-resolver-rules=MAP * ~NOTFOUND`) and WebRTC
+  is restricted to proxied UDP. (Before Stage 4 this paragraph claimed websockets were aborted; they were not — a page's WebSocket
+  reached a private listener. Fixed and regression-tested.) Residual, untestable here: blind UDP via WebRTC.
 * If `LE_EGRESS_PROXY` is set, the proxy makes the connection: the engine pre-resolves and refuses definite private targets,
   but rebinding protection then depends on the proxy (untested here).
 * Page text is data: it is parsed, whitespace/control-character-stripped and length-capped, stored as strings, and escaped in
   CSV output. The LLM tier treats page text as untrusted, must return a schema-valid reply whose values are **verbatim
   extractions** (value ⊂ quote ⊂ page text we sent); anything else is dropped. No page content is ever executed.
-* robots.txt is respected (`LE_RESPECT_ROBOTS`, default on); unreachable robots.txt ⇒ treated as disallow, retried later.
-  Robots compliance is not a substitute for reading a site's terms.
+* robots.txt is respected (`LE_RESPECT_ROBOTS`, default on): 401/403 on robots.txt ⇒ disallow; other 4xx ⇒ allow;
+  5xx/timeout ⇒ disallow, retried later; `Crawl-delay` is honoured (raises the per-host delay; above `LE_MAX_CRAWL_DELAY` the site
+  is skipped). Robots compliance is not a substitute for reading a site's terms.
+* The engine never works around access controls: 401/403 are permanent failures (never retried), anti-bot interstitials
+  (`cf-mitigated: challenge`, "Just a moment…", PerimeterX/DataDome markers on small pages) are recorded as `bot_challenge` and
+  neither retried nor rendered in the browser. A reCAPTCHA *widget* on a normal page is not treated as a challenge.
+* Redirects to a different registrable domain (rebrand, parking page, wrong input) are rejected as `redirected_off_domain`:
+  nothing from the destination is attributed to the input company.
+* Every request (pages, robots.txt, browser sub-requests, refusals) is appended to `fetch_log` (`LE_FETCH_AUDIT_LOG`).
+* Each request has a hard wall-clock deadline (`LE_TOTAL_TIMEOUT`) in addition to per-read timeouts (a slow-drip server can no
+  longer hold a connection); TLS certificate failures are permanent and never downgraded to HTTP; handshake failures are not retried.
+* The engine refuses to start with the placeholder `LE_USER_AGENT` (no anonymous crawling).
+* API: a single shared bearer token (constant-time comparison); without `LE_API_TOKEN` the API only starts on loopback. No
+  per-user identity, tenancy or rate limiting — front it with a gateway. Request bodies, lists and string fields are size-capped;
+  clients can lower but never raise job budgets; secrets are `SecretStr` (masked in `repr`/dumps) and credential-looking
+  substrings are redacted from stored/logged error text.
 * Secrets: configuration only via environment; API keys are never logged or returned; errors stored/returned are sanitised.
 * The `LE_HOST_OVERRIDES` setting exists **only** for tests/benchmarks to point fixture hostnames at localhost.
 
