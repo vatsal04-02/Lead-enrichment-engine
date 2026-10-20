@@ -315,7 +315,7 @@ async def test_per_domain_min_delay_and_concurrency_are_enforced(fixtures):
         assert time.monotonic() - t0 >= 0.3 * 3 - 0.05            # 4 requests => 3 enforced gaps
         stamps = [t for t, h, p in fixtures.state.hit_log if h == s.host]
         gaps = [b - a for a, b in zip(stamps, stamps[1:])]
-        assert min(gaps) >= 0.25
+        assert min(gaps) >= 0.2          # server-side timestamps; client enforces 0.3 s, allow scheduling jitter
     finally:
         await eng.stop()
 

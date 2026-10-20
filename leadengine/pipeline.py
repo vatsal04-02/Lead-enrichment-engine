@@ -9,11 +9,13 @@ Tier 5  LLM extraction                  -> only for still-missing AI-eligible fi
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import time
 from concurrent.futures import Executor, ProcessPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlsplit
 
 from psycopg.types.json import Jsonb
 
@@ -137,13 +139,20 @@ class Enricher:
         if not home.ok:
             return await self._handle_home_failure(cid, ident, requested, plan, run, home, t_start, budget, job_id, row_index)
 
+        if not _on_site(home.final_url or home.url, ident):
+            # The site redirected to a different registrable domain (rebrand, parking page, wrong input).
+            # Its content is NOT evidence about the input company, so nothing is extracted from it.
+            home = dataclasses.replace(home, error_kind="redirected_off_domain",
+                                       error=f"redirected to {urlsplit(home.final_url).hostname}")
+            return await self._handle_home_failure(cid, ident, requested, plan, run, home, t_start, budget, job_id, row_index)
+
         ex = await self._parse_page(home, "home", ident.key, run)
         picks_src += ex.candidates
         pages_text.append((home.final_url or home.url, ex.visible_text))
         link_map = ex.links
         home_js_hint = ex.js_hint
         homepage_url = home.final_url or home.url
-        website_ok = _registrable_host(homepage_url) == ident.key
+        website_ok = True      # off-domain redirects were rejected above
         t2.fields_found = len(self._found(picks_src, plan, ident))
 
         # ---- Tier 3: targeted pages for still-missing valuable fields
@@ -178,7 +187,7 @@ class Enricher:
             t3.requests += run.http_requests - before
             if budget is not None and res.error_kind == "budget":
                 break
-            if not res.ok:
+            if not res.ok or not _on_site(res.final_url or res.url, ident):
                 continue
             pages_used += 1
             pex = await self._parse_page(res, kind, ident.key, run)
@@ -302,7 +311,8 @@ class Enricher:
         return score_company(rows, requested)
 
     async def _handle_home_failure(self, cid, ident, requested, plan, run, home, t_start, budget, job_id, row_index):
-        permanent = (home.error_kind in ("blocked", "robots", "content_type", "too_large")
+        permanent = (home.error_kind in ("blocked", "robots", "content_type", "too_large", "bot_challenge",
+                                         "redirected_off_domain")
                      or (home.error_kind == "http" and home.status in PERMANENT_HTTP)
                      or (home.error_kind == "network" and "DNS resolution failed" in home.error))
         if home.error_kind == "budget":
@@ -352,6 +362,14 @@ class Enricher:
 
 def budget_allows(budget: Optional[Budget], kind: str) -> bool:
     return budget is None or budget.allows(kind)
+
+
+def _on_site(url: str, ident: Identity) -> bool:
+    """Same registrable domain, or one host is a subdomain of the other (also covers suffixes the bundled
+    public-suffix list does not know)."""
+    host = (urlsplit(url).hostname or "").lower()
+    return (_registrable_host(url) == ident.key or host == ident.host
+            or host.endswith("." + ident.host) or ident.host.endswith("." + host))
 
 
 def _registrable_host(url: str) -> str:

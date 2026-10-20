@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     backoff_max: float = 8.0
     max_retry_after: float = 30.0        # a longer Retry-After is not waited out; the fetch fails
     respect_robots: bool = True
+    max_crawl_delay: float = 30.0        # robots.txt Crawl-delay above this => the site is skipped, not hammered or waited out
     http_cache_default_ttl: int = 86400  # used when the origin sends no freshness info
     http_cache_max_body_bytes: int = 1_000_000
     egress_proxy: Optional[str] = None   # explicit proxy; weakens DNS-rebinding pinning (see README)

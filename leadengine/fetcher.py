@@ -29,6 +29,19 @@ from .security import BlockedDestination, Resolver, build_http_client, sanitize_
 
 HTML_TYPES = ("text/html", "application/xhtml+xml")
 RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
+# Strong, page-level anti-bot interstitial phrases only. A reCAPTCHA widget on a normal contact form is NOT a challenge.
+CHALLENGE_MARKERS = ("just a moment...", "/cdn-cgi/challenge-platform", "attention required! | cloudflare",
+                     "checking your browser before accessing", "px-captcha", "captcha-delivery.com",
+                     "please verify you are a human", "enable javascript and cookies to continue")
+
+
+def looks_like_challenge(headers, raw_len: int, text: str) -> bool:
+    if (headers.get("cf-mitigated") or "").lower() == "challenge":
+        return True
+    if raw_len > 100_000:
+        return False
+    low = text.lower()
+    return any(m in low for m in CHALLENGE_MARKERS)
 
 
 @dataclass
@@ -61,7 +74,7 @@ class DomainLimiter:
     """Per-host concurrency cap + minimum spacing between request starts + 429 cool-down."""
 
     class _State:
-        __slots__ = ("sem", "next_at", "cooldown_until", "lock", "waiters")
+        __slots__ = ("sem", "next_at", "cooldown_until", "lock", "waiters", "min_delay")
 
         def __init__(self, n: int):
             self.sem = asyncio.Semaphore(n)
@@ -69,6 +82,7 @@ class DomainLimiter:
             self.cooldown_until = 0.0
             self.lock = asyncio.Lock()
             self.waiters = 0
+            self.min_delay = 0.0     # raised by robots.txt Crawl-delay
 
     def __init__(self, settings: Settings):
         self.s = settings
@@ -88,6 +102,9 @@ class DomainLimiter:
                   if st.waiters == 0 and st.next_at < now and st.cooldown_until < now
                   and not st.sem.locked()][: max(1, len(self.states) // 2)]:
             del self.states[h]
+
+    def set_min_delay(self, host: str, seconds: float) -> None:
+        self._state(host).min_delay = seconds
 
     def cooldown(self, host: str, seconds: float) -> None:
         st = self._state(host)
@@ -112,7 +129,7 @@ class _Slot:
             async with st.lock:
                 now = time.monotonic()
                 start = max(now, st.next_at, st.cooldown_until)
-                st.next_at = start + self.lim.s.per_domain_min_delay
+                st.next_at = start + max(self.lim.s.per_domain_min_delay, st.min_delay)
             if start > now:
                 await asyncio.sleep(start - now)
         except BaseException:
@@ -216,7 +233,7 @@ class Fetcher:
                     if run is not None:
                         run.http_requests += 1
                         run.cost_http_usd += self.s.cost_per_http_request_usd
-                    async with self.client.stream("GET", current) as resp:
+                    async with asyncio.timeout(self.s.total_timeout), self.client.stream("GET", current) as resp:
                         loc = resp.headers.get("location")
                         if resp.status_code in (301, 302, 303, 307, 308) and loc:
                             current = urljoin(current, loc)
@@ -231,7 +248,7 @@ class Fetcher:
                             run.bytes_downloaded += total
                         hdrs = {"content-type": resp.headers.get("content-type", "application/octet-stream")}
                         return resp.status_code, hdrs, b"".join(body)
-            except (BlockedDestination, httpx.HTTPError):
+            except (BlockedDestination, httpx.HTTPError, TimeoutError):
                 return 0, {}, b""
         return 0, {}, b""
 
@@ -322,13 +339,16 @@ class Fetcher:
                     if run is not None:
                         run.http_requests += 1
                         run.cost_http_usd += self.s.cost_per_http_request_usd
-                    async with self.client.stream("GET", current, headers=cond if _hop == 0 else {}) as resp:
+                    # read_timeout resets on every received chunk, so a slow-drip server could hold a connection
+                    # forever; total_timeout is a hard deadline for the whole request (headers + body).
+                    async with asyncio.timeout(self.s.total_timeout), \
+                            self.client.stream("GET", current, headers=cond if _hop == 0 else {}) as resp:
                         loc = resp.headers.get("location")
                         if resp.status_code in (301, 302, 303, 307, 308) and loc:
                             current = urljoin(current, loc)
                             continue
                         return await self._handle_response(url, current, resp, cached, run, ttl_override, cu.host)
-            except httpx.TimeoutException as e:
+            except (httpx.TimeoutException, TimeoutError) as e:
                 return FetchResult(url=url, final_url=current, error_kind="timeout",
                                    error=type(e).__name__)
             except httpx.HTTPError as e:
@@ -354,6 +374,9 @@ class Fetcher:
         status = resp.status_code
         ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
         cc = _parse_cache_control(resp.headers.get("cache-control", ""))
+        if (resp.headers.get("cf-mitigated") or "").lower() == "challenge":     # never retry or work around
+            return FetchResult(url=url, final_url=current, status=status, error_kind="bot_challenge",
+                               error="site served an anti-bot challenge; not attempting to bypass")
 
         if status == 304 and cached:
             await self._cache_touch(url, self._expiry(cc, resp.headers, ttl_override))
@@ -397,7 +420,11 @@ class Fetcher:
             run.bytes_downloaded += total
             run.pages_fetched += 1
         digest = hashlib.sha256(raw).hexdigest()
-        res = FetchResult(url=url, final_url=current, status=200, text=decode_body(raw, resp.headers.get("content-type", "")),
+        decoded = decode_body(raw, resp.headers.get("content-type", ""))
+        if looks_like_challenge(resp.headers, total, decoded):
+            return FetchResult(url=url, final_url=current, status=status, error_kind="bot_challenge",
+                               error="site served an anti-bot challenge; not attempting to bypass")
+        res = FetchResult(url=url, final_url=current, status=200, text=decoded,
                           content_type=ctype, content_hash=digest, bytes=total)
         if "no-store" not in cc and "private" not in cc:
             await self._cache_put(url, res, raw, resp.headers.get("etag"), resp.headers.get("last-modified"),
@@ -460,28 +487,36 @@ class Fetcher:
                     if len(self._robots) > 20000:
                         self._robots.clear()
                     self._robots[origin] = entry
+                    if entry[2] == "rules" and entry[3]:
+                        self.limiter.set_min_delay(host, float(entry[3]))
             self._robots_locks.pop(origin, None)
-        _, parser, mode = entry
+        _, parser, mode, delay = entry
         if mode == "disallow_all":     # RFC 9309: unreachable robots.txt => assume disallowed, but retryable
             return False, "network", "robots.txt unreachable (5xx/timeout) — retry later"
+        if mode == "forbidden":        # 401/403: access control on robots.txt itself — we do not push past it
+            return False, "robots", "robots.txt access denied (HTTP 401/403) — treated as disallow"
         if mode == "blocked":
             return False, "blocked", "robots.txt destination blocked"
+        if delay and delay > self.s.max_crawl_delay:
+            return False, "robots", f"robots.txt Crawl-delay {delay}s exceeds LE_MAX_CRAWL_DELAY={self.s.max_crawl_delay}s"
         if parser is None or parser.can_fetch(self.s.user_agent, url):
             return True, "", ""
         return False, "robots", "disallowed by robots.txt"
 
-    async def _load_robots(self, origin: str, run) -> tuple[float, Optional[RobotFileParser], str]:
+    async def _load_robots(self, origin: str, run):
         ttl = 3600.0
         res = await self.fetch(origin + "/robots.txt", run, None, use_robots=False, ttl_override=86400)
         horizon = time.monotonic() + ttl
         if res.ok and res.status == 200:
             p = RobotFileParser()
             p.parse(res.text.splitlines())
-            return horizon, p, "rules"
+            return horizon, p, "rules", p.crawl_delay(self.s.user_agent)
+        if res.error_kind == "http" and res.status in (401, 403):
+            return horizon, None, "forbidden", None
         if res.error_kind == "http" and 400 <= res.status < 500:
-            return horizon, None, "allow_all"          # RFC 9309: 4xx => no restrictions
+            return horizon, None, "allow_all", None          # RFC 9309: other 4xx => no restrictions
         if res.error_kind == "blocked":
-            return horizon, None, "blocked"
+            return horizon, None, "blocked", None
         if res.error_kind in ("content_type", "too_large"):
-            return horizon, None, "allow_all"
-        return time.monotonic() + 120, None, "disallow_all"  # 5xx/timeouts: be conservative, retry soon
+            return horizon, None, "allow_all", None
+        return time.monotonic() + 120, None, "disallow_all", None   # 5xx/timeouts: be conservative, retry soon

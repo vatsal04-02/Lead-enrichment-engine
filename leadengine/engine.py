@@ -12,6 +12,10 @@ from .fetcher import Fetcher
 from .pipeline import Enricher
 
 
+class ConfigError(RuntimeError):
+    pass
+
+
 class Engine:
     def __init__(self, settings: Optional[Settings] = None, provider: Optional[LLMProvider] = None):
         self.settings = settings or get_settings()
@@ -24,6 +28,9 @@ class Engine:
 
     async def start(self, init_db: bool = True) -> "Engine":
         s = self.settings
+        if "example.invalid" in s.user_agent and not s.host_overrides:
+            raise ConfigError("LE_USER_AGENT is still the placeholder. Sites must be able to identify and contact you: "
+                              'set e.g. LE_USER_AGENT="YourBot/1.0 (+https://your.site/bot; ops@your.site)"')
         self.db = await Database(s).open(init=init_db)
         self.fetcher = Fetcher(s, self.db)
         provider = self._provider or make_provider(s)
