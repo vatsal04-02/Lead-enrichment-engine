@@ -176,11 +176,19 @@ class CSVReader:
 
 
 # ------------------------------------------------------------------ export
+_LEAD_WS = re.compile(r"^[\s\x00-\x1f]*")
+
+
 def spreadsheet_safe(v: Optional[str]) -> str:
-    """Neutralise CSV/formula injection in scraped (untrusted) text."""
+    """Neutralise CSV/formula injection in untrusted text: if the first meaningful character could start a
+    formula, prefix an apostrophe. Plain phone-like numbers (+1 512-555-0100) are left alone."""
     if not v:
         return ""
-    if v[0] in "=@\t\r" or (v[0] in "+-" and not re.fullmatch(r"[+\-]?[\d\s().\-]+", v)):
+    body = v[_LEAD_WS.match(v).end():]
+    if not body:
+        return v
+    first = body[0]
+    if first in "=@" or v[0] in "\t\r\n" or (first in "+-" and not re.fullmatch(r"[+\-]?[\d\s().\-]+", body)):
         return "'" + v
     return v
 

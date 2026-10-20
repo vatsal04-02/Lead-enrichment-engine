@@ -142,8 +142,7 @@ class Worker:
                         continue
                     items = await jobs.claim_items(db, s, job_id, self.id, min(room, s.claim_batch_size))
                     if not items:
-                        r = await jobs.refresh_counts(db, job_id)
-                        if r["open"] == 0:
+                        if not await jobs.has_open_items(db, job_id):     # cheap: uses the open-items index
                             break
                         # remaining items are in flight elsewhere or waiting out a retry backoff
                         await asyncio.sleep(0.5 if not inflight and queue.empty() else 0.1)

@@ -102,6 +102,7 @@ class Settings(BaseSettings):
     compute_usd_per_hour: float = 0.0
 
     # --- API ---
+    max_json_bytes: int = Field(1_000_000, ge=1024)   # request body cap for JSON endpoints (CSV has max_csv_bytes)
     api_token: Optional[SecretStr] = None      # if set, required as "Authorization: Bearer <token>"
 
     @model_validator(mode="after")

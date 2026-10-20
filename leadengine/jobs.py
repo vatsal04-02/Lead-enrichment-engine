@@ -306,6 +306,13 @@ async def skip_remaining(db: Database, job_id: str, error_kind: str, error: str)
         return cur.rowcount
 
 
+async def has_open_items(db: Database, job_id: str) -> bool:
+    async with db.connection() as c:
+        r = await (await c.execute("SELECT EXISTS (SELECT 1 FROM job_items WHERE job_id=%s AND status IN ('queued','running')) e",
+                                   (job_id,))).fetchone()
+        return r["e"]
+
+
 async def refresh_counts(db: Database, job_id: str) -> dict:
     async with db.connection() as c:
         r = await (await c.execute(
@@ -421,7 +428,7 @@ async def job_items(db: Database, job_id: str, *, status: Optional[str] = None, 
         return await (await c.execute(q, args)).fetchall()
 
 
-async def export_csv(db: Database, job_id: str) -> AsyncIterator[str]:
+async def export_csv(db: Database, job_id: str, sanitize_originals: bool = False) -> AsyncIterator[str]:
     """Stream the result CSV: original columns first (unchanged), then le_* columns per requested field."""
     async with db.connection() as c:
         j = await (await c.execute("SELECT config, requested_fields FROM jobs WHERE id=%s", (job_id,))).fetchone()
@@ -460,7 +467,10 @@ async def export_csv(db: Database, job_id: str) -> AsyncIterator[str]:
                     rows[f] = d
                 sc = score_company(rows, req, now) if rows else None
                 orig = [r["input"].get(h, "") for h in cols]
-                out = [*orig, r["row_index"], r["status"], r["outcome"] or "", r["error"] or "", r["domain"] or "",
+                if sanitize_originals:
+                    orig = [spreadsheet_safe(x) for x in orig]
+                out = [*orig, r["row_index"], r["status"], r["outcome"] or "", spreadsheet_safe(r["error"]),
+                       spreadsheet_safe(r["domain"]),
                        r["known_company"], r["duplicate_of"] or "",
                        sc["completeness"] if sc else "", sc["quality"] if sc else ""]
                 for f in req:

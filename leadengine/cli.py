@@ -107,7 +107,14 @@ async def cmd_metrics(a):
 def cmd_serve(a):
     import uvicorn
     from .api import create_app
-    uvicorn.run(create_app(), host=a.host, port=a.port)
+    settings = get_settings()
+    if a.host not in ("127.0.0.1", "::1", "localhost") and settings.api_token is None:
+        raise SystemExit("Refusing to listen on a non-loopback address without authentication: set LE_API_TOKEN "
+                         "(and put the API behind TLS / a gateway).")
+    if settings.host_overrides:
+        logging.getLogger("leadengine").warning("LE_HOST_OVERRIDES is set: SSRF address rules are relaxed for %s "
+                                                "(test/benchmark use only)", settings.host_overrides)
+    uvicorn.run(create_app(settings), host=a.host, port=a.port)
 
 
 def main(argv=None):
