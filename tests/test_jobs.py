@@ -347,3 +347,44 @@ async def test_same_company_enriched_concurrently_yields_one_record_and_one_fetc
         assert (await (await c.execute("SELECT count(*) n FROM companies")).fetchone())["n"] == 1
         assert (await (await c.execute("SELECT count(*) n FROM company_fields WHERE field='email'")).fetchone())["n"] == 1
     assert fixtures.state.count(s.host, "/") <= 2                 # single-flight; at most one race window
+
+
+async def test_sigkilled_worker_process_loses_no_work(fixtures):
+    """Real crash, not a simulated one: kill -9 a worker subprocess mid-job, then let a second worker finish."""
+    import os, signal, subprocess, sys
+    eng = await fresh_engine(fixtures)
+    try:
+        slow = [s for s in fixtures.state.sites.values() if s.kind == "slow"][:4]
+        plain = [s for s in fixtures.state.sites.values() if s.kind == "plain"][:8]
+        cos = [{"website": url_of(fixtures, s)} for s in slow + plain]
+        n = len(cos)
+        assert n >= 8
+        info = await jobs.create_job_from_companies(eng.db, eng.settings, cos, requested=["email", "company_name"])
+        env = {**os.environ, "LE_DATABASE_URL": eng.settings.database_url.get_secret_value(),
+               "LE_USER_AGENT": "CrashTest/1.0", "LE_HOST_OVERRIDES": "*.fixture.test=127.0.0.1", "LE_ALLOWED_PORTS": "80,443",
+               "LE_PER_DOMAIN_MIN_DELAY": "0", "LE_BROWSER_ENABLED": "false", "LE_JOB_LEASE_SECONDS": "3",
+               "LE_JOB_HEARTBEAT_SECONDS": "1", "LE_GLOBAL_CONCURRENCY": "2", "LE_RESPECT_ROBOTS": "false"}
+        p = subprocess.Popen([sys.executable, "-m", "leadengine", "worker", "--once"], env=env, cwd=os.getcwd(),
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(100):                                   # wait until it is genuinely mid-job
+            await asyncio.sleep(0.1)
+            st = await jobs.job_status(eng.db, info["job_id"])
+            if st["counts"]["running"] > 0:
+                break
+        p.send_signal(signal.SIGKILL)
+        p.wait(timeout=10)
+        st = await jobs.job_status(eng.db, info["job_id"])
+        assert st["status"] == "running" and st["counts"]["running"] > 0          # orphaned: nobody owns it any more
+        assert st["counts"]["succeeded"] < n
+        await asyncio.sleep(3.2)                               # leases expire
+        await run_worker(eng)
+        st = await jobs.job_status(eng.db, info["job_id"])
+        assert st["status"] == "completed" and st["counts"]["succeeded"] == n and st["counts"]["running"] == 0
+        assert st["worker_claims"] == 2                         # killed worker + recovery worker
+        async with eng.db.connection() as c:
+            att = (await (await c.execute("SELECT max(attempts) m FROM job_items")).fetchone())["m"]
+            dup = (await (await c.execute("SELECT count(*) n FROM (SELECT company_id, field FROM company_fields GROUP BY 1,2 HAVING count(*)>1) x")).fetchone())["n"]
+            comps = (await (await c.execute("SELECT count(*) n FROM companies")).fetchone())["n"]
+        assert att <= 2 and dup == 0 and comps == n
+    finally:
+        await eng.stop()

@@ -103,13 +103,14 @@ async def run_single(a) -> dict:
                  http_max_keepalive=max(20, a.concurrency), queue_size=max(32, a.concurrency * 2),
                  claim_batch_size=max(8, a.concurrency // 2), browser_enabled=not a.no_browser,
                  browser_executable=a.browser_executable or None, parse_workers=a.parse_workers,
-                 db_pool_max=max(10, min(40, a.concurrency)), job_heartbeat_seconds=5, ai_provider="")
+                 db_pool_max=max(10, min(40, a.concurrency)), job_heartbeat_seconds=5, ai_provider="",
+                 budget_pages=0, budget_seconds=0, budget_est_cost_usd=0, budget_browser_ops=0, budget_ai_calls=0)
     eng = Engine(s)
     await eng.start()
     async with eng.db.connection() as c:
-        await c.execute("TRUNCATE jobs, companies, http_cache, extraction_cache, enrichment_runs RESTART IDENTITY CASCADE")
+        await c.execute("TRUNCATE jobs, companies, http_cache, extraction_cache, enrichment_runs, fetch_log RESTART IDENTITY CASCADE")
     rows = build_input(a.sites, a.port)
-    info = await jobs.create_job_from_companies(eng.db, s, rows, requested=None, budget={"pages": 0, "seconds": 0, "est_cost_usd": 0})
+    info = await jobs.create_job_from_companies(eng.db, s, rows, requested=None)
     w = Worker(eng)
     cpu0, t0 = time.process_time(), time.perf_counter()
     await w.run(once=True)
