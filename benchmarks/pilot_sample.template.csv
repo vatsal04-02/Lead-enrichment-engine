@@ -1,4 +1,0 @@
-domain,name,permission_basis,reviewed_by
-yourcompany.example,Your Company,"own website operated by the pilot owner",your.name
-# Replace every row. permission_basis must explain WHY fetching is permitted (own site / written permission with date / public marketing
-# site whose terms and robots.txt you reviewed, with date). Bare registrable domains only. Max 50 rows. Delete these comment lines.

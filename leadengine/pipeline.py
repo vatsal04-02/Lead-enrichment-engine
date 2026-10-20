@@ -312,7 +312,7 @@ class Enricher:
 
     async def _handle_home_failure(self, cid, ident, requested, plan, run, home, t_start, budget, job_id, row_index):
         permanent = (home.error_kind in ("blocked", "robots", "content_type", "too_large", "bot_challenge",
-                                         "redirected_off_domain", "tls", "tls_cert")
+                                         "redirected_off_domain", "tls", "tls_cert", "redirect_loop")
                      or (home.error_kind == "http" and home.status in PERMANENT_HTTP)
                      or (home.error_kind == "network" and "DNS resolution failed" in home.error))
         if home.error_kind == "budget":

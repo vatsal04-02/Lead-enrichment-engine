@@ -35,6 +35,7 @@ class BrowserRenderer:
         self._browser = None
         self._lock = asyncio.Lock()
         self.available: Optional[bool] = None
+        self.last_error: str = ""
 
     async def _ensure(self) -> bool:
         if self._browser and not self._browser.is_connected():      # crashed/closed: relaunch on next use

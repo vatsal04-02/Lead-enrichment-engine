@@ -33,18 +33,23 @@ import json
 import math
 import os
 import random
+import io
 import re
 import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from benchmarks.sysinfo import git_commit, hardware as sys_hardware  # noqa: E402
 from leadengine import jobs, metrics  # noqa: E402
+from leadengine.compat import configure_event_loop  # noqa: E402
 from leadengine.config import Settings  # noqa: E402
+from leadengine.csv_io import detect_delimiter  # noqa: E402
 from leadengine.domain import InvalidDomain, normalize  # noqa: E402
 from leadengine.engine import Engine  # noqa: E402
 from leadengine.worker import Worker  # noqa: E402
@@ -59,42 +64,73 @@ class PilotError(SystemExit):
     pass
 
 
+# ------------------------------------------------------------------ CSV reading that survives Windows/Excel output
+def read_text_flexible(path: str) -> str:
+    """UTF-8 (with/without BOM), UTF-16 (Windows PowerShell 5.1 `>`/Out-File default) or Windows-1252 (Excel 'CSV')."""
+    raw = Path(path).read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    if b"\x00" in raw[:4096]:
+        raise PilotError(f"{path} does not look like a text/CSV file (binary content)")
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252", errors="replace")
+
+
+def read_csv_flexible(path: str, skip_comments: bool = False) -> tuple[list[str], list[dict]]:
+    """Rows carry '__line__' = the line number in the original file (comment lines count), for error messages."""
+    text = read_text_flexible(path)
+    numbered = [(n, l) for n, l in enumerate(text.splitlines(), 1) if not (skip_comments and l.lstrip().startswith("#"))]
+    if not numbered:
+        return [], []
+    body = "\n".join(l for _, l in numbered)
+    rd = csv.DictReader(io.StringIO(body), delimiter=detect_delimiter("\n".join(l for _, l in numbered[:8])))
+    rd.fieldnames = [(h or "").strip() for h in (rd.fieldnames or [])]
+    rows = []
+    for r in rd:
+        r["__line__"] = numbered[min(rd.line_num, len(numbered)) - 1][0]
+        rows.append(r)
+    return rd.fieldnames, rows
+
+
 # ------------------------------------------------------------------ sample validation (no network)
 def load_sample(path: str) -> list[dict]:
-    with open(path, newline="", encoding="utf-8-sig") as f:
-        rd = csv.DictReader(line for line in f if not line.lstrip().startswith("#"))
-        missing = [c for c in REQUIRED_COLS if c not in (rd.fieldnames or [])]
-        if missing:
-            raise PilotError(f"sample file must have columns {REQUIRED_COLS}; missing {missing}")
-        rows = list(rd)
+    fieldnames, rows = read_csv_flexible(path, skip_comments=True)
+    missing = [c for c in REQUIRED_COLS if c not in fieldnames]
+    if missing:
+        raise PilotError(f"sample file must have columns {REQUIRED_COLS}; missing {missing} (found: {fieldnames}). "
+                         "Save as 'CSV UTF-8' with comma separators.")
     problems, seen, out = [], {}, []
     if not rows:
         raise PilotError("sample file has no rows")
     if len(rows) > MAX_SITES:
         raise PilotError(f"pilot is capped at {MAX_SITES} manually reviewed sites (got {len(rows)})")
-    for i, r in enumerate(rows, 2):
+    for r in rows:
+        i = r["__line__"]
         dom = (r.get("domain") or "").strip()
+        ident = None
         if re.search(r"[/?#@:\s]", dom) or "://" in dom:
             problems.append(f"line {i}: 'domain' must be a bare domain such as example.com, not {dom!r}")
-            continue
-        try:
-            ident = normalize(dom)
-        except InvalidDomain as e:
-            problems.append(f"line {i}: {dom!r}: {e}")
-            continue
-        if ident.host != ident.key and ident.host != "www." + ident.key:
+        else:
+            try:
+                ident = normalize(dom)
+            except InvalidDomain as e:
+                problems.append(f"line {i}: domain {dom!r}: {e}")
+        if ident and ident.host != ident.key and ident.host != "www." + ident.key:
             problems.append(f"line {i}: use the registrable domain ({ident.key}), not the subdomain {ident.host}")
         basis = (r.get("permission_basis") or "").strip()
         if len(basis) < 15 or PLACEHOLDER.match(basis):
-            problems.append(f"line {i}: {dom}: permission_basis must say WHY fetching is permitted "
+            problems.append(f"line {i}: {dom or '(empty)'}: permission_basis must say WHY fetching is permitted "
                             "(e.g. 'own site', 'written permission from X on 2026-01-05', 'public marketing site; ToS reviewed 2026-01-05')")
         if not (r.get("reviewed_by") or "").strip():
-            problems.append(f"line {i}: {dom}: reviewed_by is empty")
-        if ident.key in seen:
-            problems.append(f"line {i}: {dom} duplicates line {seen[ident.key]}")
-        seen[ident.key] = i
-        out.append({"domain": ident.key, "name": (r.get("name") or "").strip() or None,
-                    "permission_basis": basis, "reviewed_by": r["reviewed_by"].strip()})
+            problems.append(f"line {i}: {dom or '(empty)'}: reviewed_by is empty")
+        if ident:
+            if ident.key in seen:
+                problems.append(f"line {i}: {dom} duplicates line {seen[ident.key]}")
+            seen[ident.key] = i
+            out.append({"domain": ident.key, "name": (r.get("name") or "").strip() or None,
+                        "permission_basis": basis, "reviewed_by": (r.get("reviewed_by") or "").strip()})
     if problems:
         raise PilotError("sample file rejected:\n  " + "\n  ".join(problems))
     return out
@@ -125,10 +161,18 @@ def live_settings(args) -> Settings:
 
 
 def check_db_name(url: str) -> None:
-    name = url.rsplit("/", 1)[-1].split("?")[0]
+    """The pilot TRUNCATES with --reset: accept only a plain postgresql:// URL whose database is *_pilot and that
+    does not smuggle another database in through query parameters."""
+    u = urlsplit(url)
+    name = u.path.lstrip("/")
+    q = {k.lower() for k in parse_qs(u.query)}
+    if u.scheme not in ("postgresql", "postgres"):
+        raise PilotError("LE_DATABASE_URL / --database-url must be a postgresql://user@host:port/dbname URL")
     if not name.endswith("_pilot"):
         raise PilotError(f"database name must end in _pilot (got {name!r}); the pilot TRUNCATES its tables with --reset. "
-                         "Create one: scripts/dev_postgres.sh   or   createdb enrich_pilot")
+                         "Create one with: createdb enrich_pilot")
+    if q & {"dbname", "service", "options", "target_session_attrs"}:
+        raise PilotError(f"database URL query must not contain {sorted(q & {'dbname', 'service', 'options', 'target_session_attrs'})}")
 
 
 # ------------------------------------------------------------------ statistics
@@ -234,8 +278,9 @@ async def export_artifacts(eng: Engine, job_id: str, domains: list[str], out_dir
                       f.verification_status, f.verification_method, f.checks
                FROM company_fields f JOIN companies c ON c.id=f.company_id WHERE c.domain = ANY(%s) ORDER BY c.domain, f.field""", (domains,))).fetchall()
         log = await (await c.execute("SELECT * FROM fetch_log WHERE job_id=%s ORDER BY id", (job_id,))).fetchall()
+        items = await (await c.execute("SELECT row_index, input, domain, status, error_kind, error FROM job_items WHERE job_id=%s ORDER BY row_index", (job_id,))).fetchall()
     pp = out_dir / f"pilot-{stamp}-provenance.csv"
-    with open(pp, "w", newline="") as f:
+    with open(pp, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(["domain", "field", "value", "status", "source_url", "method", "tier", "extracted_at", "refresh_after",
                     "verification_status", "verification_method", "checks_json"])
@@ -244,41 +289,164 @@ async def export_artifacts(eng: Engine, job_id: str, domains: list[str], out_dir
                         r["extracted_at"].isoformat(), r["refresh_after"].isoformat(), r["verification_status"],
                         r["verification_method"], json.dumps(r["checks"])])
     lp = out_dir / f"pilot-{stamp}-fetch-log.jsonl"
-    with open(lp, "w") as f:
+    with open(lp, "w", encoding="utf-8") as f:
         for r in log:
             f.write(json.dumps({**{k: v for k, v in r.items() if k not in ("ts", "job_id")}, "ts": r["ts"].isoformat(),
                                 "job_id": str(r["job_id"])}) + "\n")
-    # audit sheet: stratified by field, seeded => reproducible
-    rng = random.Random(rng_seed)
-    audit = out_dir / f"pilot-{stamp}-audit.csv"
-    byf: dict[str, list] = {}
+    arts = {"provenance_csv": str(pp), "fetch_log_jsonl": str(lp)}
+    arts["review_sheet"] = str(write_review_sheet(out_dir / f"pilot-{stamp}-review.csv", prov, items))
+    if truth_fn:      # fixture runs only: per-field sheet judged automatically against ground truth
+        rng = random.Random(rng_seed)
+        audit = out_dir / f"pilot-{stamp}-audit.csv"
+        byf: dict[str, list] = {}
+        for r in prov:
+            if r["status"] == "found" and r["field"] in FIELDS_REPORTED:
+                byf.setdefault(r["field"], []).append(r)
+        n_rows = 0
+        with open(audit, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.writer(f)
+            w.writerow(["domain", "field", "value", "source_url", "method", "verdict (correct|incorrect|unsure)", "notes"])
+            for fld in sorted(byf):
+                pick = byf[fld] if len(byf[fld]) <= sample_per_field else rng.sample(byf[fld], sample_per_field)
+                for r in sorted(pick, key=lambda x: x["domain"]):
+                    w.writerow([r["domain"], fld, r["value"], r["source_url"], r["method"], truth_fn(r["domain"], fld, r["value"]),
+                                "auto-judged against fixture ground truth"])
+                    n_rows += 1
+        arts.update(audit_sheet=str(audit), audit_rows=n_rows)
+    return arts
+
+
+# ------------------------------------------------------------------ per-company manual review sheet
+REVIEW_COLUMNS = ["input_domain", "input_name", "extracted_company_name", "company_name_source_url", "website_final_url",
+                  "website_status", "extracted_email", "email_source_url", "extracted_phone", "phone_source_url",
+                  "company_name_verdict", "email_verdict", "phone_verdict", "duplicate_status", "usable_record",
+                  "failure_reason", "reviewer_notes"]
+VERDICTS_PRESENT = ("correct", "incorrect", "misattributed", "unsure")
+VERDICTS_BLANK = ("missed", "absent", "unchecked")
+
+
+def write_review_sheet(path: Path, prov: list[dict], items: list[dict]) -> Path:
+    """One row per input company, pre-filled with what the engine returned and where it came from. The reviewer fills the
+    *_verdict columns, usable_record and notes by opening each source URL (and, for blank cells, the site itself)."""
+    by: dict[str, dict] = {}
     for r in prov:
-        if r["status"] == "found" and r["field"] in FIELDS_REPORTED:
-            byf.setdefault(r["field"], []).append(r)
-    n_rows = 0
-    with open(audit, "w", newline="") as f:
+        by.setdefault(r["domain"], {})[r["field"]] = r
+    digits = lambda v: re.sub(r"\D", "", v or "")
+    owners: dict[tuple, list[str]] = {}
+    for dom, d in by.items():
+        if "email" in d and d["email"]["value"]:
+            owners.setdefault(("email", d["email"]["value"].lower()), []).append(dom)
+        if "phone" in d and d["phone"]["value"]:
+            owners.setdefault(("phone", digits(d["phone"]["value"])), []).append(dom)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        w.writerow(["domain", "field", "value", "source_url", "method", "verdict (correct|incorrect|unsure)", "notes"])
-        for fld in sorted(byf):
-            pick = byf[fld] if len(byf[fld]) <= sample_per_field else rng.sample(byf[fld], sample_per_field)
-            for r in sorted(pick, key=lambda x: x["domain"]):
-                verdict = truth_fn(r["domain"], fld, r["value"]) if truth_fn else ""
-                w.writerow([r["domain"], fld, r["value"], r["source_url"], r["method"], verdict, "auto-judged against fixture ground truth" if truth_fn else ""])
-                n_rows += 1
-    return {"provenance_csv": str(pp), "fetch_log_jsonl": str(lp), "audit_sheet": str(audit), "audit_rows": n_rows}
+        w.writerow(REVIEW_COLUMNS)
+        for it in items:
+            dom = it["domain"] or ""
+            d = by.get(dom, {})
+            val = lambda fld: (d[fld]["value"] if fld in d and d[fld]["status"] == "found" else "") or ""
+            src = lambda fld: (d[fld]["source_url"] if fld in d and d[fld]["status"] == "found" else "") or ""
+            web = d.get("website")
+            if web:
+                wstat = (web["verification_status"] + (":" + web["verification_method"] if web["verification_method"] else "")
+                         if web["verification_status"] == "verified" else "failed:" + str((web["checks"] or {}).get("error_kind") or "unknown"))
+            else:
+                wstat = "not_fetched"
+            dup = []
+            for kind, v in (("email", val("email").lower()), ("phone", digits(val("phone")))):
+                if v:
+                    dup += [f"shared_{kind}_with:{o}" for o in owners.get((kind, v), []) if o != dom]
+            fail = "" if it["status"] == "succeeded" else f"{it['error_kind'] or it['status']}: {(it['error'] or '')[:200]}"
+            w.writerow([it["input"].get("website", ""), it["input"].get("name", "") or "", val("company_name"), src("company_name"),
+                        web["value"] if web else "", wstat, val("email"), src("email"), val("phone"), src("phone"),
+                        "", "", "", ";".join(dup) or "unique", "", fail, ""])
+    return path
+
+
+def score_review(path: str, run_json: str | None = None) -> dict:
+    """Metrics from the human-completed per-company review sheet. Only what the reviewer judged is counted."""
+    headers, rows = read_csv_flexible(path)
+    missing = [c for c in REVIEW_COLUMNS if c not in headers]
+    if missing:
+        raise PilotError(f"review sheet is missing columns {missing}")
+    fields = {"company_name": ("extracted_company_name", "company_name_verdict"), "email": ("extracted_email", "email_verdict"),
+              "phone": ("extracted_phone", "phone_verdict")}
+    per, problems = {}, []
+    for fld, (valcol, vcol) in fields.items():
+        c = {k: 0 for k in VERDICTS_PRESENT + VERDICTS_BLANK}
+        c["unreviewed"] = 0
+        for i, r in enumerate(rows, 2):
+            v = (r[vcol] or "").strip().lower()
+            has = bool((r[valcol] or "").strip())
+            if not v:
+                c["unreviewed"] += 1
+            elif has and v in VERDICTS_PRESENT or (not has and v in VERDICTS_BLANK):
+                c[v] += 1
+            else:
+                problems.append(f"row {i}: {vcol}={v!r} is not valid when the extracted value is {'present' if has else 'blank'}")
+        judged = c["correct"] + c["incorrect"] + c["misattributed"]
+        rec_den = c["correct"] + c["missed"]
+        per[fld] = {**c, "precision": label(round(c["correct"] / judged, 3) if judged else None, "MEASURED",
+                                            "correct / (correct+incorrect+misattributed); 'unsure' excluded"),
+                    "precision_wilson95": wilson(c["correct"], judged),
+                    "recall_reviewed": label(round(c["correct"] / rec_den, 3) if rec_den else None, "MEASURED",
+                                             "correct / (correct+missed) over rows where blanks were checked; 'unchecked' excluded; biased by what you chose to check")}
+    usable_auto = 0
+    reviewer_yes = disagree = unreviewed_usable = 0
+    for r in rows:
+        v = {k: (r[c] or "").strip().lower() for k, (_, c) in fields.items()}
+        auto = v["company_name"] == "correct" and (v["email"] == "correct" or v["phone"] == "correct")
+        usable_auto += auto
+        u = (r["usable_record"] or "").strip().lower()
+        if not u:
+            unreviewed_usable += 1
+        else:
+            reviewer_yes += u == "yes"
+            disagree += (u == "yes") != auto
+    n = len(rows)
+    failures: dict[str, int] = {}
+    for r in rows:
+        fr = (r["failure_reason"] or "").strip()
+        if fr:
+            failures[fr.split(":")[0]] = failures.get(fr.split(":")[0], 0) + 1
+    out = {"rows": n, "per_field": per,
+           "misattributed_values": label(sum(p["misattributed"] for p in per.values()), "MEASURED", "value belongs to a different company/entity"),
+           "incorrect_values": label(sum(p["incorrect"] for p in per.values()), "MEASURED"),
+           "usable_audited": label(round(usable_auto / n, 3) if n else None, "MEASURED",
+                                   "company_name correct AND (email correct OR phone correct), per verdict columns"),
+           "usable_audited_wilson95": wilson(usable_auto, n),
+           "usable_reviewer_yes": reviewer_yes, "usable_disagreements_with_verdicts": disagree, "usable_unreviewed": unreviewed_usable,
+           "duplicate_flags": label(sum(1 for r in rows if (r["duplicate_status"] or "unique").strip() != "unique"), "MEASURED",
+                                    "rows flagged shared_* or edited by the reviewer"),
+           "failure_reasons": label(failures, "MEASURED"),
+           "not_in_review_sheet": label(None, "UNKNOWN", "address, description, linkedin_url accuracy are not reviewed by this sheet"),
+           "problems": problems, "caveat": "small hand-picked sample: read the intervals, not the point estimates; e-mail is never verified here"}
+    if run_json:
+        rep = json.loads(Path(run_json).read_text(encoding="utf-8"))
+        ai = rep["results"]["ai_cost"]
+        attempted = rep["results"]["volume"]["unique_companies_attempted"]["value"]
+        per1k = ai["per_1000_attempted_usd"]
+        if per1k["value"] is None:
+            out["ai_cost_per_1000_usable_audited_usd"] = label(None, "UNKNOWN", per1k.get("note", ""))
+        elif usable_auto == 0:
+            out["ai_cost_per_1000_usable_audited_usd"] = label(None, "UNKNOWN", "no audited-usable record")
+        else:
+            total = per1k["value"] * attempted / 1000
+            out["ai_cost_per_1000_usable_audited_usd"] = label(round(total / usable_auto * 1000, 4), per1k["label"],
+                                                                "total AI cost of the run / audited usable records x 1000; excludes infrastructure")
+    return out
 
 
 def score_sheet(path: str) -> dict:
     per: dict[str, dict] = {}
     pending = 0
-    with open(path, newline="") as f:
-        for r in csv.DictReader(f):
-            v = (r.get("verdict (correct|incorrect|unsure)") or "").strip().lower()
-            if v not in ("correct", "incorrect", "unsure"):
-                pending += 1
-                continue
-            d = per.setdefault(r["field"], {"correct": 0, "incorrect": 0, "unsure": 0})
-            d[v] += 1
+    for r in read_csv_flexible(path)[1]:
+        v = (r.get("verdict (correct|incorrect|unsure)") or "").strip().lower()
+        if v not in ("correct", "incorrect", "unsure"):
+            pending += 1
+            continue
+        d = per.setdefault(r["field"], {"correct": 0, "incorrect": 0, "unsure": 0})
+        d[v] += 1
     out = {}
     for fld, d in sorted(per.items()):
         n = d["correct"] + d["incorrect"]
@@ -327,12 +495,6 @@ def markdown(rep: dict) -> str:
     return "\n".join(L)
 
 
-def hardware() -> dict:
-    sys.path.insert(0, str(ROOT))
-    from benchmarks.run_local import hardware as hw
-    return hw()
-
-
 async def run(args) -> None:
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -371,6 +533,15 @@ async def run(args) -> None:
             raise PilotError("Refusing to contact live websites. Review every row of the sample, then pass "
                              f"--confirm-permitted --confirm-sites {len(rows)}  (the number of rows you reviewed).")
         s = live_settings(args)
+        if args.ai:      # fail BEFORE any site is contacted: a missing key would otherwise surface as one failed call per company
+            if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
+                raise PilotError("--ai needs ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) in the environment; not set.")
+            if args.ai_price_in is None or args.ai_price_out is None:
+                raise PilotError("--ai also needs --ai-price-in and --ai-price-out (USD per million tokens) so cost can be estimated.")
+        if args.allow_browser and sys.platform == "win32":
+            print("WARNING: the browser tier cannot run on native Windows (psycopg needs the selector event loop; Playwright needs "
+                  "subprocess support). JavaScript-only sites will be reported as failures/missing fields. Use WSL2 for tier 4.",
+                  file=sys.stderr)
         sample_path = args.sample
         sample_sha = hashlib.sha256(Path(args.sample).read_bytes()).hexdigest()
         mode = "LIVE pilot (real websites)"
@@ -393,10 +564,19 @@ async def run(args) -> None:
         wall = time.perf_counter() - t0
         await eng.audit.flush()
         res = await collect(eng, info["job_id"], len(rows), wall, s, args.compute_usd_per_hour)
+        async with eng.db.connection() as c:
+            pg_version = (await (await c.execute("SHOW server_version")).fetchone())["server_version"]
+        res["browser_tier"] = {
+            "requested": label(bool(args.allow_browser), "MEASURED"),
+            "launched_successfully": label(getattr(eng.browser, "available", None) if eng.browser else None,
+                                           "MEASURED" if eng.browser and eng.browser.available is not None else "UNKNOWN",
+                                           "None = no site needed it, so it was never started"),
+            "error": label((getattr(eng.browser, "last_error", "") or None) if eng.browser else None, "MEASURED",
+                           "if not None, JavaScript-only sites could NOT be rendered and their fields are missing because of this")}
         domains = [normalize(r["domain"]).key for r in rows]
         arts = await export_artifacts(eng, info["job_id"], domains, out_dir, stamp, args.audit_per_field, 7, truth_fn)
-        rep = {"mode": mode, "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "hardware": hardware(),
-               "git_commit": subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT).stdout.strip(),
+        rep = {"mode": mode, "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "hardware": sys_hardware(pg_version),
+               "git_commit": git_commit(),
                "sample": sample_path, "sample_sha256": sample_sha, "sample_size": len(rows), "job_id": info["job_id"],
                "settings": {k: getattr(s, k) for k in ("global_concurrency", "per_domain_concurrency", "per_domain_min_delay", "max_pages_per_company",
                                                        "http_max_retries", "total_timeout", "max_response_bytes", "max_redirects", "respect_robots",
@@ -408,8 +588,8 @@ async def run(args) -> None:
                    "Politeness delay (>=2 s per host) dominates throughput; do not extrapolate to larger runs without re-measuring."]}
         if truth_fn:
             rep["fixture_auto_audit"] = score_sheet(arts["audit_sheet"])
-        (out_dir / f"pilot-{stamp}.json").write_text(json.dumps(rep, indent=2, default=str))
-        (out_dir / f"pilot-{stamp}.md").write_text(markdown(rep))
+        (out_dir / f"pilot-{stamp}.json").write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        (out_dir / f"pilot-{stamp}.md").write_text(markdown(rep), encoding="utf-8")
         print(json.dumps({"report": str(out_dir / f"pilot-{stamp}.md"), **arts}, indent=2))
     finally:
         await eng.stop()
@@ -438,13 +618,23 @@ def main() -> None:
     r.add_argument("--ai-model", default="claude-haiku-5-5"); r.add_argument("--ai-price-in", type=float); r.add_argument("--ai-price-out", type=float)
     r.add_argument("--compute-usd-per-hour", type=float, default=0.0)
     r.add_argument("--audit-per-field", type=int, default=30); r.add_argument("--out-dir", default=str(ROOT / "benchmarks" / "results"))
-    sc = sub.add_parser("score"); sc.add_argument("--audit", required=True)
+    sc = sub.add_parser("score", help="compute metrics from a human-completed review (or fixture audit) sheet")
+    sc.add_argument("--review", help="per-company review sheet (pilot-<ts>-review.csv)"); sc.add_argument("--audit", help="per-field audit sheet (fixture runs)")
+    sc.add_argument("--run-json", help="pilot-<ts>.json, to add cost per 1000 audited-usable records")
     a = ap.parse_args()
+    configure_event_loop()
     if a.cmd == "validate":
         rows = load_sample(a.sample)
         print(f"OK: {len(rows)} sites validated (no network access performed)")
     elif a.cmd == "score":
-        print(json.dumps(score_sheet(a.audit), indent=2))
+        if bool(a.review) == bool(a.audit):
+            raise PilotError("pass exactly one of --review (live pilot) or --audit (fixture run)")
+        result = score_review(a.review, a.run_json) if a.review else score_sheet(a.audit)
+        text = json.dumps(result, indent=2, default=str)
+        dest = Path(a.review or a.audit).with_suffix(".scored.json")
+        dest.write_text(text, encoding="utf-8")
+        print(text)
+        print(f"\nwrote {dest}", file=sys.stderr)
     else:
         if not a.fixtures and not a.sample:
             raise PilotError("--sample is required for a live run (or use --fixtures for the synthetic dry run)")

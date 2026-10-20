@@ -119,7 +119,7 @@ websites (see its docstring for every guard rail). Steps, all on your own machin
 
 ```bash
 createdb enrich_pilot                                   # database name MUST end in _pilot (the pilot truncates it with --reset)
-cp benchmarks/pilot_sample.template.csv my_sites.csv    # fill in 20-50 rows: domain, name, permission_basis, reviewed_by
+cp benchmarks/templates/pilot_input.csv my_sites.csv    # fill in 20-50 rows: domain, name, permission_basis, reviewed_by
 python -m benchmarks.pilot validate --sample my_sites.csv                # offline check, no requests
 export LE_USER_AGENT="YourBot/1.0 (+https://your.site/bot; ops@your.site)"
 export LE_DATABASE_URL=postgresql://USER@HOST/enrich_pilot

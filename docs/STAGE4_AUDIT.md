@@ -62,7 +62,7 @@ pip install -e '.[dev,browser,ai]'                 # browser/ai optional; `playw
 createdb enrich_pilot                              # or: scripts/dev_postgres.sh (local throwaway cluster, includes enrich_pilot)
 export LE_DATABASE_URL=postgresql://USER@HOST/enrich_pilot
 export LE_USER_AGENT="YourBot/1.0 (+https://your.site/bot; ops@your.site)"      # must identify you and include a contact
-cp benchmarks/pilot_sample.template.csv my_sites.csv        # 20–50 rows: domain,name,permission_basis,reviewed_by
+cp benchmarks/templates/pilot_input.csv my_sites.csv        # 20–50 rows: domain,name,permission_basis,reviewed_by
 python -m benchmarks.pilot validate --sample my_sites.csv                        # offline
 python -m benchmarks.pilot run --sample my_sites.csv --confirm-permitted --confirm-sites <ROWS> --reset
 #   add --allow-browser --browser-executable PATH, and/or --ai --ai-price-in X --ai-price-out Y (needs ANTHROPIC_API_KEY)

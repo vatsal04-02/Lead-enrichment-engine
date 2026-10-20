@@ -7,7 +7,7 @@ p50/p95, usable-record rate, required-field coverage, wrong/spurious value rate,
 HTTP requests/company, AI calls/company, browser frequency, retry rate, bytes, process CPU use, peak RSS.
 
 What it is NOT: a statement about the real web. Fixture sites are synthetic, served from localhost with a
-fixed simulated latency. Use benchmarks/run_live.py for real-site numbers.
+fixed simulated latency. Use benchmarks/pilot.py for real-site numbers.
 
 Each configuration runs in its own subprocess against a freshly emptied database and a separate fixture-server
 process (so the fixture does not share the engine's GIL).
@@ -20,7 +20,10 @@ import datetime as dt
 import json
 import os
 import platform
-import resource
+try:
+    import resource          # Unix only
+except ImportError:
+    resource = None
 import socket
 import statistics
 import subprocess
@@ -125,7 +128,7 @@ async def run_single(a) -> dict:
                    "simulated_latency_ms": a.latency_ms, "browser": not a.no_browser, "parse_workers": a.parse_workers},
         "wall_seconds": round(wall, 2), "companies_per_minute": round(n_unique / wall * 60, 1),
         "input_rows_per_minute": round(n_in / wall * 60, 1),
-        "process_cpu_utilisation": round(cpu / wall, 2), "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+        "process_cpu_utilisation": round(cpu / wall, 2), "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1) if resource else None,
         "job_status": st["status"], "counts": st["counts"], "error_summary": st["error_summary"],
         "duplicate_rate": round(st["counts"]["duplicate"] / n_in, 4),
         "latency_ms": m["latency_ms"], "per_company": m["per_company"], "outcomes": m["outcomes"],
@@ -143,25 +146,14 @@ async def run_single(a) -> dict:
 
 
 def hardware() -> dict:
-    cpu = "?"
-    try:
-        cpu = next(l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name"))
-    except Exception:
-        pass
-    mem = "?"
-    try:
-        mem = f"{int(next(l for l in open('/proc/meminfo') if l.startswith('MemTotal')).split()[1]) / 1048576:.1f} GiB"
-    except Exception:
-        pass
-    pg = "?"
+    pg = "unknown"
     try:
         pg = subprocess.run(["psql", "-h", "127.0.0.1", "-p", "55432", "-U", "enrich", "-d", "enrich", "-tAc", "show server_version"],
-                            capture_output=True, text=True, timeout=10).stdout.strip()
-    except Exception:
+                            capture_output=True, text=True, timeout=10).stdout.strip() + " (local, same machine, fsync=off)"
+    except (OSError, subprocess.SubprocessError):
         pass
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=ROOT).stdout.strip()
-    return {"platform": platform.platform(), "cpu": cpu, "logical_cpus": os.cpu_count(), "memory": mem,
-            "python": platform.python_version(), "postgres": pg + " (local, same machine, fsync=off)", "git_commit": commit}
+    from benchmarks.sysinfo import hardware as hw
+    return hw(pg)
 
 
 def choose_operating_point(results: list[dict]) -> dict:
@@ -210,6 +202,8 @@ def main() -> None:
     ap.add_argument("--min-delay-one", type=float, dest="min_delay_one")
     ap.add_argument("--port", type=int, default=0)
     a = ap.parse_args()
+    from leadengine.compat import configure_event_loop
+    configure_event_loop()
 
     if a.single:
         a.concurrency, a.min_delay = a.concurrency_one, a.min_delay_one

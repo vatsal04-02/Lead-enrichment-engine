@@ -1,0 +1,27 @@
+domain,name,permission_basis,reviewed_by
+# FlowHQ pilot input. One row per company website you are PERMITTED to fetch. 20 rows recommended, 50 maximum.
+# domain: bare registrable domain only (acme.com) - no http://, paths, subdomains, ports or e-mail addresses.
+# name: optional label for your own reference (not used for matching).
+# permission_basis: WHY you may fetch it (own site / written permission from NAME on DATE / public marketing site whose terms and robots.txt you reviewed on DATE). Min 15 characters; 'TODO' is rejected.
+# reviewed_by: who checked the permission.
+# Every row below is a placeholder and WILL FAIL validation until you replace it. Save as 'CSV UTF-8' (comma delimited). Lines starting with # are ignored.
+REPLACE_ME_01,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_02,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_03,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_04,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_05,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_06,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_07,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_08,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_09,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_10,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_11,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_12,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_13,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_14,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_15,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_16,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_17,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_18,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_19,,TODO,REPLACE_WITH_REVIEWER
+REPLACE_ME_20,,TODO,REPLACE_WITH_REVIEWER

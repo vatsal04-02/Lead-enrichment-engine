@@ -10,6 +10,7 @@ import sys
 
 from . import jobs, metrics, store
 from .budget import Budget
+from .compat import configure_event_loop
 from .config import get_settings
 from .domain import normalize
 from .engine import Engine
@@ -50,7 +51,10 @@ async def _run_worker(e: Engine, once: bool):
     w = Worker(e)
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, w.request_stop)
+        try:
+            loop.add_signal_handler(sig, w.request_stop)
+        except NotImplementedError:      # Windows event loops: fall back to the signal module (SIGINT / Ctrl+C)
+            signal.signal(sig, lambda *_: loop.call_soon_threadsafe(w.request_stop))
     await w.run(once=once)
 
 
@@ -137,6 +141,7 @@ def main(argv=None):
     s = sub.add_parser("metrics"); s.add_argument("--job-id"); s.set_defaults(fn=cmd_metrics)
     s = sub.add_parser("serve"); s.add_argument("--host", default="127.0.0.1"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     a = p.parse_args(argv)
+    configure_event_loop()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     if asyncio.iscoroutinefunction(a.fn):
         asyncio.run(a.fn(a))

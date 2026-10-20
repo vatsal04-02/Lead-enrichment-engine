@@ -5,3 +5,6 @@ __pycache__/
 *.egg-info/
 .env
 benchmarks/results/*.tmp
+
+# pilot working files (may contain third-party company data and your permission records)
+pilot_out/

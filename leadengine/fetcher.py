@@ -382,7 +382,7 @@ class Fetcher:
             except BlockedDestination as e:
                 return FetchResult(url=url, final_url=current, error_kind="blocked",
                                    error=sanitize_for_log(str(e)))
-        return FetchResult(url=url, error_kind="network", error="too many redirects")
+        return FetchResult(url=url, error_kind="redirect_loop", error=f"more than {self.s.max_redirects} redirects")
 
     async def _precheck_via_proxy(self, cu) -> None:
         try:
