@@ -110,8 +110,13 @@ class Enricher:
         unreachable_recent = (not force and comp["last_outcome"] == "unreachable" and comp["last_enriched_at"]
                               and comp["last_enriched_at"] + timedelta(days=self.s.not_found_retry_days) > now)
         if not plan.needs_network or unreachable_recent:
-            outcome = "cached" if not unreachable_recent or not plan.needs_network else "unreachable"
-            return await self._finish(cid, ident, requested, plan, run, outcome, t_start, budget, job_id, row_index,
+            if unreachable_recent and plan.needs_network:
+                web = rows.get("website") or {}
+                return await self._finish(cid, ident, requested, plan, run, "unreachable", t_start, budget, job_id,
+                                          row_index, record_outcome=False,
+                                          error_kind=(web.get("checks") or {}).get("error_kind") or "unreachable",
+                                          error=web.get("note") or "site was unreachable on a recent attempt")
+            return await self._finish(cid, ident, requested, plan, run, "cached", t_start, budget, job_id, row_index,
                                       record_outcome=False)
 
         # ---- Tier 2: homepage

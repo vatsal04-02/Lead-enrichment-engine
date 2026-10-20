@@ -73,8 +73,15 @@ class Worker:
         await self._drain()
 
     async def _drain(self) -> None:
-        if self._active:
-            await asyncio.wait(self._active, timeout=self.s.shutdown_grace_seconds + 5)
+        """After a stop request: give in-flight work `shutdown_grace_seconds`, then cancel what is left.
+        Cancelled jobs hand their unfinished items back to the queue (see _run_job)."""
+        if not self._active:
+            return
+        _, pending = await asyncio.wait(self._active, timeout=self.s.shutdown_grace_seconds)
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     def request_stop(self) -> None:
         self.stop.set()
@@ -146,7 +153,8 @@ class Worker:
                 [asyncio.create_task(consumer()) for _ in range(s.global_concurrency)]
         try:
             await asyncio.gather(*tasks[:1], *tasks[2:])
-        except asyncio.CancelledError:
+        except asyncio.CancelledError:      # grace period over: return unfinished items, then propagate
+            await asyncio.shield(jobs.release_worker_items(db, job_id, self.id))
             raise
         finally:
             for t in tasks:

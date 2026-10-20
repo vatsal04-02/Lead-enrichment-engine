@@ -108,6 +108,7 @@ async def test_unreachable_cases_are_safe_and_not_retried(engine, fixtures, kind
     hits = fixtures.state.total()
     r2 = await engine.enricher.enrich(url_of(fixtures, s), requested=REQ)
     assert r2.outcome == "unreachable" and fixtures.state.total() == hits   # remembered; no repeat fetching
+    assert r2.error_kind == err and r2.error                                 # and still explains why
     w = await value(engine, s.host, "website")
     assert w["verification_status"] == "failed"
 

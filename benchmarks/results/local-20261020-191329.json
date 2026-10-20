@@ -1,0 +1,1465 @@
+{
+  "timestamp": "2026-10-20T19:08:06+00:00",
+  "hardware": {
+    "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logical_cpus": 4,
+    "memory": "15.7 GiB",
+    "python": "3.13.16",
+    "postgres": "16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) (local, same machine, fsync=off)",
+    "git_commit": "b5ceab8"
+  },
+  "args": {
+    "sites": 300,
+    "concurrency": "4,8,16,32,64,128",
+    "min_delay": "0.5",
+    "latency_ms": 40.0,
+    "no_browser": false,
+    "browser_executable": "/opt/pw-browsers/chromium",
+    "parse_workers": 0,
+    "database_url": "postgresql://enrich@127.0.0.1:55432/enrich",
+    "out_dir": "/home/user/Lead-enrichment-engine/benchmarks/results",
+    "concurrency_one": null,
+    "min_delay_one": null,
+    "port": 0
+  },
+  "by_min_delay": {
+    "0.5": {
+      "runs": [
+        {
+          "config": {
+            "sites": 300,
+            "input_rows": 315,
+            "concurrency": 4,
+            "per_domain_min_delay_s": 0.5,
+            "simulated_latency_ms": 40.0,
+            "browser": true,
+            "parse_workers": 0
+          },
+          "wall_seconds": 129.77,
+          "companies_per_minute": 138.7,
+          "input_rows_per_minute": 145.6,
+          "process_cpu_utilisation": 0.08,
+          "peak_rss_mb": 88.3,
+          "job_status": "partially_completed",
+          "counts": {
+            "total": 315,
+            "queued": 0,
+            "running": 0,
+            "processed": 315,
+            "succeeded": 279,
+            "failed": 21,
+            "invalid": 0,
+            "duplicate": 15,
+            "skipped": 0,
+            "failed_or_invalid": 21
+          },
+          "error_summary": {
+            "unreachable_http": 9,
+            "duplicate_in_file": 15,
+            "unreachable_robots": 7,
+            "unreachable_blocked": 2,
+            "unreachable_too_large": 3
+          },
+          "duplicate_rate": 0.0476,
+          "latency_ms": {
+            "p50": 1561.0,
+            "p95": 2623.2
+          },
+          "per_company": {
+            "http_requests": 3.887,
+            "cache_hits": 0.0,
+            "ai_calls": 0.0,
+            "retries": 0.0733,
+            "bytes_downloaded": 1845
+          },
+          "outcomes": {
+            "cached": 0,
+            "enriched": 0,
+            "partial": 279,
+            "no_data": 0,
+            "unreachable": 21,
+            "failed": 0
+          },
+          "browser_rendering_frequency": 0.05,
+          "ai_call_frequency": 0.0,
+          "retry_rate": 0.0189,
+          "tiers": {
+            "tier1_existing": {
+              "attempted": 300,
+              "success_rate": 0.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 0,
+              "latency_ms_p50": 1.3,
+              "latency_ms_p95": 3.3,
+              "requests": 0,
+              "cost_usd_estimated": 0.0
+            },
+            "tier2_http": {
+              "attempted": 300,
+              "success_rate": 0.723,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 1073,
+              "latency_ms_p50": 547.4,
+              "latency_ms_p95": 1594.0,
+              "requests": 615,
+              "cost_usd_estimated": 0.0
+            },
+            "tier3_targeted": {
+              "attempted": 253,
+              "success_rate": 0.581,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 241,
+              "latency_ms_p50": 991.5,
+              "latency_ms_p95": 996.9,
+              "requests": 506,
+              "cost_usd_estimated": 0.0
+            },
+            "tier4_browser": {
+              "attempted": 15,
+              "success_rate": 1.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 30,
+              "latency_ms_p50": 2051.1,
+              "latency_ms_p95": 3353.4,
+              "requests": 45,
+              "cost_usd_estimated": 0.0
+            }
+          },
+          "usable_record_rate": 0.63,
+          "required_field_coverage": 0.979,
+          "precision_of_returned_values": 1.0,
+          "accuracy": {
+            "truth": 1195,
+            "correct": 1180,
+            "wrong": 0,
+            "missed": 15,
+            "spurious": 0,
+            "returned": 1344,
+            "usable": 189,
+            "reachable": 0,
+            "req_truth": 717,
+            "req_correct": 702,
+            "per_field_recall": {
+              "address": 1.0,
+              "company_name": 0.926,
+              "description": 1.0,
+              "email": 1.0,
+              "founded_year": 1.0,
+              "linkedin_url": 1.0,
+              "phone": 1.0
+            },
+            "by_kind": {
+              "injection": {
+                "sites": 8,
+                "usable": 8,
+                "correct": 48,
+                "truth": 48,
+                "spurious": 0
+              },
+              "slow": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "not_found": {
+                "sites": 9,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "jsonld": {
+                "sites": 52,
+                "usable": 52,
+                "correct": 312,
+                "truth": 312,
+                "spurious": 0
+              },
+              "plain": {
+                "sites": 89,
+                "usable": 89,
+                "correct": 445,
+                "truth": 445,
+                "spurious": 0
+              },
+              "flaky": {
+                "sites": 10,
+                "usable": 10,
+                "correct": 60,
+                "truth": 60,
+                "spurious": 0
+              },
+              "etag": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "contact_only": {
+                "sites": 47,
+                "usable": 0,
+                "correct": 94,
+                "truth": 94,
+                "spurious": 0
+              },
+              "prose_only": {
+                "sites": 17,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "broken_html": {
+                "sites": 11,
+                "usable": 0,
+                "correct": 11,
+                "truth": 11,
+                "spurious": 0
+              },
+              "js_shell": {
+                "sites": 15,
+                "usable": 0,
+                "correct": 30,
+                "truth": 45,
+                "spurious": 0
+              },
+              "ratelimited": {
+                "sites": 12,
+                "usable": 12,
+                "correct": 72,
+                "truth": 72,
+                "spurious": 0
+              },
+              "redirect_private": {
+                "sites": 2,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "robots_blocked": {
+                "sites": 7,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "huge": {
+                "sites": 3,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              }
+            }
+          },
+          "measured_usage": {
+            "http_requests": 1166,
+            "bytes": 553371,
+            "browser_ops": 15,
+            "ai_calls": 0
+          }
+        },
+        {
+          "config": {
+            "sites": 300,
+            "input_rows": 315,
+            "concurrency": 8,
+            "per_domain_min_delay_s": 0.5,
+            "simulated_latency_ms": 40.0,
+            "browser": true,
+            "parse_workers": 0
+          },
+          "wall_seconds": 64.4,
+          "companies_per_minute": 279.5,
+          "input_rows_per_minute": 293.5,
+          "process_cpu_utilisation": 0.15,
+          "peak_rss_mb": 89.1,
+          "job_status": "partially_completed",
+          "counts": {
+            "total": 315,
+            "queued": 0,
+            "running": 0,
+            "processed": 315,
+            "succeeded": 279,
+            "failed": 21,
+            "invalid": 0,
+            "duplicate": 15,
+            "skipped": 0,
+            "failed_or_invalid": 21
+          },
+          "error_summary": {
+            "unreachable_http": 9,
+            "duplicate_in_file": 15,
+            "unreachable_robots": 7,
+            "unreachable_blocked": 2,
+            "unreachable_too_large": 3
+          },
+          "duplicate_rate": 0.0476,
+          "latency_ms": {
+            "p50": 1561.0,
+            "p95": 2636.5
+          },
+          "per_company": {
+            "http_requests": 3.813,
+            "cache_hits": 0.0,
+            "ai_calls": 0.0,
+            "retries": 0.0,
+            "bytes_downloaded": 1845
+          },
+          "outcomes": {
+            "cached": 0,
+            "enriched": 0,
+            "partial": 279,
+            "no_data": 0,
+            "unreachable": 21,
+            "failed": 0
+          },
+          "browser_rendering_frequency": 0.05,
+          "ai_call_frequency": 0.0,
+          "retry_rate": 0.0,
+          "tiers": {
+            "tier1_existing": {
+              "attempted": 300,
+              "success_rate": 0.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 0,
+              "latency_ms_p50": 1.3,
+              "latency_ms_p95": 4.2,
+              "requests": 0,
+              "cost_usd_estimated": 0.0
+            },
+            "tier2_http": {
+              "attempted": 300,
+              "success_rate": 0.723,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 1073,
+              "latency_ms_p50": 547.5,
+              "latency_ms_p95": 564.9,
+              "requests": 593,
+              "cost_usd_estimated": 0.0
+            },
+            "tier3_targeted": {
+              "attempted": 253,
+              "success_rate": 0.581,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 241,
+              "latency_ms_p50": 990.4,
+              "latency_ms_p95": 996.3,
+              "requests": 506,
+              "cost_usd_estimated": 0.0
+            },
+            "tier4_browser": {
+              "attempted": 15,
+              "success_rate": 1.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 30,
+              "latency_ms_p50": 2050.5,
+              "latency_ms_p95": 3817.3,
+              "requests": 45,
+              "cost_usd_estimated": 0.0
+            }
+          },
+          "usable_record_rate": 0.63,
+          "required_field_coverage": 0.979,
+          "precision_of_returned_values": 1.0,
+          "accuracy": {
+            "truth": 1195,
+            "correct": 1180,
+            "wrong": 0,
+            "missed": 15,
+            "spurious": 0,
+            "returned": 1344,
+            "usable": 189,
+            "reachable": 0,
+            "req_truth": 717,
+            "req_correct": 702,
+            "per_field_recall": {
+              "address": 1.0,
+              "company_name": 0.926,
+              "description": 1.0,
+              "email": 1.0,
+              "founded_year": 1.0,
+              "linkedin_url": 1.0,
+              "phone": 1.0
+            },
+            "by_kind": {
+              "injection": {
+                "sites": 8,
+                "usable": 8,
+                "correct": 48,
+                "truth": 48,
+                "spurious": 0
+              },
+              "slow": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "not_found": {
+                "sites": 9,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "jsonld": {
+                "sites": 52,
+                "usable": 52,
+                "correct": 312,
+                "truth": 312,
+                "spurious": 0
+              },
+              "plain": {
+                "sites": 89,
+                "usable": 89,
+                "correct": 445,
+                "truth": 445,
+                "spurious": 0
+              },
+              "flaky": {
+                "sites": 10,
+                "usable": 10,
+                "correct": 60,
+                "truth": 60,
+                "spurious": 0
+              },
+              "etag": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "contact_only": {
+                "sites": 47,
+                "usable": 0,
+                "correct": 94,
+                "truth": 94,
+                "spurious": 0
+              },
+              "prose_only": {
+                "sites": 17,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "broken_html": {
+                "sites": 11,
+                "usable": 0,
+                "correct": 11,
+                "truth": 11,
+                "spurious": 0
+              },
+              "js_shell": {
+                "sites": 15,
+                "usable": 0,
+                "correct": 30,
+                "truth": 45,
+                "spurious": 0
+              },
+              "ratelimited": {
+                "sites": 12,
+                "usable": 12,
+                "correct": 72,
+                "truth": 72,
+                "spurious": 0
+              },
+              "redirect_private": {
+                "sites": 2,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "robots_blocked": {
+                "sites": 7,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "huge": {
+                "sites": 3,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              }
+            }
+          },
+          "measured_usage": {
+            "http_requests": 1144,
+            "bytes": 553371,
+            "browser_ops": 15,
+            "ai_calls": 0
+          }
+        },
+        {
+          "config": {
+            "sites": 300,
+            "input_rows": 315,
+            "concurrency": 16,
+            "per_domain_min_delay_s": 0.5,
+            "simulated_latency_ms": 40.0,
+            "browser": true,
+            "parse_workers": 0
+          },
+          "wall_seconds": 35.81,
+          "companies_per_minute": 502.6,
+          "input_rows_per_minute": 527.7,
+          "process_cpu_utilisation": 0.26,
+          "peak_rss_mb": 89.8,
+          "job_status": "partially_completed",
+          "counts": {
+            "total": 315,
+            "queued": 0,
+            "running": 0,
+            "processed": 315,
+            "succeeded": 279,
+            "failed": 21,
+            "invalid": 0,
+            "duplicate": 15,
+            "skipped": 0,
+            "failed_or_invalid": 21
+          },
+          "error_summary": {
+            "unreachable_http": 9,
+            "duplicate_in_file": 15,
+            "unreachable_robots": 7,
+            "unreachable_blocked": 2,
+            "unreachable_too_large": 3
+          },
+          "duplicate_rate": 0.0476,
+          "latency_ms": {
+            "p50": 1571.5,
+            "p95": 4286.3
+          },
+          "per_company": {
+            "http_requests": 3.813,
+            "cache_hits": 0.0,
+            "ai_calls": 0.0,
+            "retries": 0.0,
+            "bytes_downloaded": 1845
+          },
+          "outcomes": {
+            "cached": 0,
+            "enriched": 0,
+            "partial": 279,
+            "no_data": 0,
+            "unreachable": 21,
+            "failed": 0
+          },
+          "browser_rendering_frequency": 0.05,
+          "ai_call_frequency": 0.0,
+          "retry_rate": 0.0,
+          "tiers": {
+            "tier1_existing": {
+              "attempted": 300,
+              "success_rate": 0.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 0,
+              "latency_ms_p50": 2.1,
+              "latency_ms_p95": 13.2,
+              "requests": 0,
+              "cost_usd_estimated": 0.0
+            },
+            "tier2_http": {
+              "attempted": 300,
+              "success_rate": 0.723,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 1073,
+              "latency_ms_p50": 550.3,
+              "latency_ms_p95": 611.2,
+              "requests": 593,
+              "cost_usd_estimated": 0.0
+            },
+            "tier3_targeted": {
+              "attempted": 253,
+              "success_rate": 0.581,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 241,
+              "latency_ms_p50": 986.4,
+              "latency_ms_p95": 1001.0,
+              "requests": 506,
+              "cost_usd_estimated": 0.0
+            },
+            "tier4_browser": {
+              "attempted": 15,
+              "success_rate": 1.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 30,
+              "latency_ms_p50": 3602.9,
+              "latency_ms_p95": 5473.5,
+              "requests": 45,
+              "cost_usd_estimated": 0.0
+            }
+          },
+          "usable_record_rate": 0.63,
+          "required_field_coverage": 0.979,
+          "precision_of_returned_values": 1.0,
+          "accuracy": {
+            "truth": 1195,
+            "correct": 1180,
+            "wrong": 0,
+            "missed": 15,
+            "spurious": 0,
+            "returned": 1344,
+            "usable": 189,
+            "reachable": 0,
+            "req_truth": 717,
+            "req_correct": 702,
+            "per_field_recall": {
+              "address": 1.0,
+              "company_name": 0.926,
+              "description": 1.0,
+              "email": 1.0,
+              "founded_year": 1.0,
+              "linkedin_url": 1.0,
+              "phone": 1.0
+            },
+            "by_kind": {
+              "injection": {
+                "sites": 8,
+                "usable": 8,
+                "correct": 48,
+                "truth": 48,
+                "spurious": 0
+              },
+              "slow": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "not_found": {
+                "sites": 9,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "jsonld": {
+                "sites": 52,
+                "usable": 52,
+                "correct": 312,
+                "truth": 312,
+                "spurious": 0
+              },
+              "plain": {
+                "sites": 89,
+                "usable": 89,
+                "correct": 445,
+                "truth": 445,
+                "spurious": 0
+              },
+              "flaky": {
+                "sites": 10,
+                "usable": 10,
+                "correct": 60,
+                "truth": 60,
+                "spurious": 0
+              },
+              "etag": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "contact_only": {
+                "sites": 47,
+                "usable": 0,
+                "correct": 94,
+                "truth": 94,
+                "spurious": 0
+              },
+              "prose_only": {
+                "sites": 17,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "broken_html": {
+                "sites": 11,
+                "usable": 0,
+                "correct": 11,
+                "truth": 11,
+                "spurious": 0
+              },
+              "js_shell": {
+                "sites": 15,
+                "usable": 0,
+                "correct": 30,
+                "truth": 45,
+                "spurious": 0
+              },
+              "ratelimited": {
+                "sites": 12,
+                "usable": 12,
+                "correct": 72,
+                "truth": 72,
+                "spurious": 0
+              },
+              "redirect_private": {
+                "sites": 2,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "robots_blocked": {
+                "sites": 7,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "huge": {
+                "sites": 3,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              }
+            }
+          },
+          "measured_usage": {
+            "http_requests": 1144,
+            "bytes": 553371,
+            "browser_ops": 15,
+            "ai_calls": 0
+          }
+        },
+        {
+          "config": {
+            "sites": 300,
+            "input_rows": 315,
+            "concurrency": 32,
+            "per_domain_min_delay_s": 0.5,
+            "simulated_latency_ms": 40.0,
+            "browser": true,
+            "parse_workers": 0
+          },
+          "wall_seconds": 27.36,
+          "companies_per_minute": 657.8,
+          "input_rows_per_minute": 690.7,
+          "process_cpu_utilisation": 0.35,
+          "peak_rss_mb": 90.5,
+          "job_status": "partially_completed",
+          "counts": {
+            "total": 315,
+            "queued": 0,
+            "running": 0,
+            "processed": 315,
+            "succeeded": 279,
+            "failed": 21,
+            "invalid": 0,
+            "duplicate": 15,
+            "skipped": 0,
+            "failed_or_invalid": 21
+          },
+          "error_summary": {
+            "unreachable_http": 9,
+            "duplicate_in_file": 15,
+            "unreachable_robots": 7,
+            "unreachable_blocked": 2,
+            "unreachable_too_large": 3
+          },
+          "duplicate_rate": 0.0476,
+          "latency_ms": {
+            "p50": 1609.0,
+            "p95": 5053.9
+          },
+          "per_company": {
+            "http_requests": 3.813,
+            "cache_hits": 0.0,
+            "ai_calls": 0.0,
+            "retries": 0.0,
+            "bytes_downloaded": 1845
+          },
+          "outcomes": {
+            "cached": 0,
+            "enriched": 0,
+            "partial": 279,
+            "no_data": 0,
+            "unreachable": 21,
+            "failed": 0
+          },
+          "browser_rendering_frequency": 0.05,
+          "ai_call_frequency": 0.0,
+          "retry_rate": 0.0,
+          "tiers": {
+            "tier1_existing": {
+              "attempted": 300,
+              "success_rate": 0.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 0,
+              "latency_ms_p50": 4.8,
+              "latency_ms_p95": 37.1,
+              "requests": 0,
+              "cost_usd_estimated": 0.0
+            },
+            "tier2_http": {
+              "attempted": 300,
+              "success_rate": 0.723,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 1073,
+              "latency_ms_p50": 558.7,
+              "latency_ms_p95": 648.3,
+              "requests": 593,
+              "cost_usd_estimated": 0.0
+            },
+            "tier3_targeted": {
+              "attempted": 253,
+              "success_rate": 0.581,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 241,
+              "latency_ms_p50": 970.5,
+              "latency_ms_p95": 1004.2,
+              "requests": 506,
+              "cost_usd_estimated": 0.0
+            },
+            "tier4_browser": {
+              "attempted": 15,
+              "success_rate": 1.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 30,
+              "latency_ms_p50": 8764.3,
+              "latency_ms_p95": 12500.8,
+              "requests": 45,
+              "cost_usd_estimated": 0.0
+            }
+          },
+          "usable_record_rate": 0.63,
+          "required_field_coverage": 0.979,
+          "precision_of_returned_values": 1.0,
+          "accuracy": {
+            "truth": 1195,
+            "correct": 1180,
+            "wrong": 0,
+            "missed": 15,
+            "spurious": 0,
+            "returned": 1344,
+            "usable": 189,
+            "reachable": 0,
+            "req_truth": 717,
+            "req_correct": 702,
+            "per_field_recall": {
+              "address": 1.0,
+              "company_name": 0.926,
+              "description": 1.0,
+              "email": 1.0,
+              "founded_year": 1.0,
+              "linkedin_url": 1.0,
+              "phone": 1.0
+            },
+            "by_kind": {
+              "injection": {
+                "sites": 8,
+                "usable": 8,
+                "correct": 48,
+                "truth": 48,
+                "spurious": 0
+              },
+              "slow": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "not_found": {
+                "sites": 9,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "jsonld": {
+                "sites": 52,
+                "usable": 52,
+                "correct": 312,
+                "truth": 312,
+                "spurious": 0
+              },
+              "plain": {
+                "sites": 89,
+                "usable": 89,
+                "correct": 445,
+                "truth": 445,
+                "spurious": 0
+              },
+              "flaky": {
+                "sites": 10,
+                "usable": 10,
+                "correct": 60,
+                "truth": 60,
+                "spurious": 0
+              },
+              "etag": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "contact_only": {
+                "sites": 47,
+                "usable": 0,
+                "correct": 94,
+                "truth": 94,
+                "spurious": 0
+              },
+              "prose_only": {
+                "sites": 17,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "broken_html": {
+                "sites": 11,
+                "usable": 0,
+                "correct": 11,
+                "truth": 11,
+                "spurious": 0
+              },
+              "js_shell": {
+                "sites": 15,
+                "usable": 0,
+                "correct": 30,
+                "truth": 45,
+                "spurious": 0
+              },
+              "ratelimited": {
+                "sites": 12,
+                "usable": 12,
+                "correct": 72,
+                "truth": 72,
+                "spurious": 0
+              },
+              "redirect_private": {
+                "sites": 2,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "robots_blocked": {
+                "sites": 7,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "huge": {
+                "sites": 3,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              }
+            }
+          },
+          "measured_usage": {
+            "http_requests": 1144,
+            "bytes": 553371,
+            "browser_ops": 15,
+            "ai_calls": 0
+          }
+        },
+        {
+          "config": {
+            "sites": 300,
+            "input_rows": 315,
+            "concurrency": 64,
+            "per_domain_min_delay_s": 0.5,
+            "simulated_latency_ms": 40.0,
+            "browser": true,
+            "parse_workers": 0
+          },
+          "wall_seconds": 28.62,
+          "companies_per_minute": 628.8,
+          "input_rows_per_minute": 660.3,
+          "process_cpu_utilisation": 0.37,
+          "peak_rss_mb": 92.9,
+          "job_status": "partially_completed",
+          "counts": {
+            "total": 315,
+            "queued": 0,
+            "running": 0,
+            "processed": 315,
+            "succeeded": 279,
+            "failed": 21,
+            "invalid": 0,
+            "duplicate": 15,
+            "skipped": 0,
+            "failed_or_invalid": 21
+          },
+          "error_summary": {
+            "unreachable_http": 9,
+            "duplicate_in_file": 15,
+            "unreachable_robots": 7,
+            "unreachable_blocked": 2,
+            "unreachable_too_large": 3
+          },
+          "duplicate_rate": 0.0476,
+          "latency_ms": {
+            "p50": 2216.5,
+            "p95": 5565.3
+          },
+          "per_company": {
+            "http_requests": 3.813,
+            "cache_hits": 0.0,
+            "ai_calls": 0.0,
+            "retries": 0.0,
+            "bytes_downloaded": 1845
+          },
+          "outcomes": {
+            "cached": 0,
+            "enriched": 0,
+            "partial": 279,
+            "no_data": 0,
+            "unreachable": 21,
+            "failed": 0
+          },
+          "browser_rendering_frequency": 0.05,
+          "ai_call_frequency": 0.0,
+          "retry_rate": 0.0,
+          "tiers": {
+            "tier1_existing": {
+              "attempted": 300,
+              "success_rate": 0.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 0,
+              "latency_ms_p50": 42.8,
+              "latency_ms_p95": 67.1,
+              "requests": 0,
+              "cost_usd_estimated": 0.0
+            },
+            "tier2_http": {
+              "attempted": 300,
+              "success_rate": 0.723,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 1073,
+              "latency_ms_p50": 703.0,
+              "latency_ms_p95": 837.1,
+              "requests": 593,
+              "cost_usd_estimated": 0.0
+            },
+            "tier3_targeted": {
+              "attempted": 253,
+              "success_rate": 0.581,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 241,
+              "latency_ms_p50": 834.4,
+              "latency_ms_p95": 1053.5,
+              "requests": 506,
+              "cost_usd_estimated": 0.0
+            },
+            "tier4_browser": {
+              "attempted": 15,
+              "success_rate": 1.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 30,
+              "latency_ms_p50": 12435.1,
+              "latency_ms_p95": 18688.0,
+              "requests": 45,
+              "cost_usd_estimated": 0.0
+            }
+          },
+          "usable_record_rate": 0.63,
+          "required_field_coverage": 0.979,
+          "precision_of_returned_values": 1.0,
+          "accuracy": {
+            "truth": 1195,
+            "correct": 1180,
+            "wrong": 0,
+            "missed": 15,
+            "spurious": 0,
+            "returned": 1344,
+            "usable": 189,
+            "reachable": 0,
+            "req_truth": 717,
+            "req_correct": 702,
+            "per_field_recall": {
+              "address": 1.0,
+              "company_name": 0.926,
+              "description": 1.0,
+              "email": 1.0,
+              "founded_year": 1.0,
+              "linkedin_url": 1.0,
+              "phone": 1.0
+            },
+            "by_kind": {
+              "injection": {
+                "sites": 8,
+                "usable": 8,
+                "correct": 48,
+                "truth": 48,
+                "spurious": 0
+              },
+              "slow": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "not_found": {
+                "sites": 9,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "jsonld": {
+                "sites": 52,
+                "usable": 52,
+                "correct": 312,
+                "truth": 312,
+                "spurious": 0
+              },
+              "plain": {
+                "sites": 89,
+                "usable": 89,
+                "correct": 445,
+                "truth": 445,
+                "spurious": 0
+              },
+              "flaky": {
+                "sites": 10,
+                "usable": 10,
+                "correct": 60,
+                "truth": 60,
+                "spurious": 0
+              },
+              "etag": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "contact_only": {
+                "sites": 47,
+                "usable": 0,
+                "correct": 94,
+                "truth": 94,
+                "spurious": 0
+              },
+              "prose_only": {
+                "sites": 17,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "broken_html": {
+                "sites": 11,
+                "usable": 0,
+                "correct": 11,
+                "truth": 11,
+                "spurious": 0
+              },
+              "js_shell": {
+                "sites": 15,
+                "usable": 0,
+                "correct": 30,
+                "truth": 45,
+                "spurious": 0
+              },
+              "ratelimited": {
+                "sites": 12,
+                "usable": 12,
+                "correct": 72,
+                "truth": 72,
+                "spurious": 0
+              },
+              "redirect_private": {
+                "sites": 2,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "robots_blocked": {
+                "sites": 7,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "huge": {
+                "sites": 3,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              }
+            }
+          },
+          "measured_usage": {
+            "http_requests": 1144,
+            "bytes": 553371,
+            "browser_ops": 15,
+            "ai_calls": 0
+          }
+        },
+        {
+          "config": {
+            "sites": 300,
+            "input_rows": 315,
+            "concurrency": 128,
+            "per_domain_min_delay_s": 0.5,
+            "simulated_latency_ms": 40.0,
+            "browser": true,
+            "parse_workers": 0
+          },
+          "wall_seconds": 30.89,
+          "companies_per_minute": 582.7,
+          "input_rows_per_minute": 611.9,
+          "process_cpu_utilisation": 0.43,
+          "peak_rss_mb": 95.1,
+          "job_status": "partially_completed",
+          "counts": {
+            "total": 315,
+            "queued": 0,
+            "running": 0,
+            "processed": 315,
+            "succeeded": 279,
+            "failed": 21,
+            "invalid": 0,
+            "duplicate": 15,
+            "skipped": 0,
+            "failed_or_invalid": 21
+          },
+          "error_summary": {
+            "unreachable_http": 9,
+            "duplicate_in_file": 15,
+            "unreachable_robots": 7,
+            "unreachable_blocked": 2,
+            "unreachable_too_large": 3
+          },
+          "duplicate_rate": 0.0476,
+          "latency_ms": {
+            "p50": 4986.5,
+            "p95": 8387.0
+          },
+          "per_company": {
+            "http_requests": 3.813,
+            "cache_hits": 0.0,
+            "ai_calls": 0.0,
+            "retries": 0.0,
+            "bytes_downloaded": 1845
+          },
+          "outcomes": {
+            "cached": 0,
+            "enriched": 0,
+            "partial": 279,
+            "no_data": 0,
+            "unreachable": 21,
+            "failed": 0
+          },
+          "browser_rendering_frequency": 0.05,
+          "ai_call_frequency": 0.0,
+          "retry_rate": 0.0,
+          "tiers": {
+            "tier1_existing": {
+              "attempted": 300,
+              "success_rate": 0.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 0,
+              "latency_ms_p50": 109.1,
+              "latency_ms_p95": 331.9,
+              "requests": 0,
+              "cost_usd_estimated": 0.0
+            },
+            "tier2_http": {
+              "attempted": 300,
+              "success_rate": 0.723,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 1073,
+              "latency_ms_p50": 1257.9,
+              "latency_ms_p95": 1650.6,
+              "requests": 593,
+              "cost_usd_estimated": 0.0
+            },
+            "tier3_targeted": {
+              "attempted": 253,
+              "success_rate": 0.581,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 241,
+              "latency_ms_p50": 1477.2,
+              "latency_ms_p95": 1579.4,
+              "requests": 506,
+              "cost_usd_estimated": 0.0
+            },
+            "tier4_browser": {
+              "attempted": 15,
+              "success_rate": 1.0,
+              "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+              "fields_found": 30,
+              "latency_ms_p50": 14338.9,
+              "latency_ms_p95": 20991.4,
+              "requests": 45,
+              "cost_usd_estimated": 0.0
+            }
+          },
+          "usable_record_rate": 0.63,
+          "required_field_coverage": 0.979,
+          "precision_of_returned_values": 1.0,
+          "accuracy": {
+            "truth": 1195,
+            "correct": 1180,
+            "wrong": 0,
+            "missed": 15,
+            "spurious": 0,
+            "returned": 1344,
+            "usable": 189,
+            "reachable": 0,
+            "req_truth": 717,
+            "req_correct": 702,
+            "per_field_recall": {
+              "address": 1.0,
+              "company_name": 0.926,
+              "description": 1.0,
+              "email": 1.0,
+              "founded_year": 1.0,
+              "linkedin_url": 1.0,
+              "phone": 1.0
+            },
+            "by_kind": {
+              "injection": {
+                "sites": 8,
+                "usable": 8,
+                "correct": 48,
+                "truth": 48,
+                "spurious": 0
+              },
+              "slow": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "not_found": {
+                "sites": 9,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "jsonld": {
+                "sites": 52,
+                "usable": 52,
+                "correct": 312,
+                "truth": 312,
+                "spurious": 0
+              },
+              "plain": {
+                "sites": 89,
+                "usable": 89,
+                "correct": 445,
+                "truth": 445,
+                "spurious": 0
+              },
+              "flaky": {
+                "sites": 10,
+                "usable": 10,
+                "correct": 60,
+                "truth": 60,
+                "spurious": 0
+              },
+              "etag": {
+                "sites": 9,
+                "usable": 9,
+                "correct": 54,
+                "truth": 54,
+                "spurious": 0
+              },
+              "contact_only": {
+                "sites": 47,
+                "usable": 0,
+                "correct": 94,
+                "truth": 94,
+                "spurious": 0
+              },
+              "prose_only": {
+                "sites": 17,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "broken_html": {
+                "sites": 11,
+                "usable": 0,
+                "correct": 11,
+                "truth": 11,
+                "spurious": 0
+              },
+              "js_shell": {
+                "sites": 15,
+                "usable": 0,
+                "correct": 30,
+                "truth": 45,
+                "spurious": 0
+              },
+              "ratelimited": {
+                "sites": 12,
+                "usable": 12,
+                "correct": 72,
+                "truth": 72,
+                "spurious": 0
+              },
+              "redirect_private": {
+                "sites": 2,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "robots_blocked": {
+                "sites": 7,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              },
+              "huge": {
+                "sites": 3,
+                "usable": 0,
+                "correct": 0,
+                "truth": 0,
+                "spurious": 0
+              }
+            }
+          },
+          "measured_usage": {
+            "http_requests": 1144,
+            "bytes": 553371,
+            "browser_ops": 15,
+            "ai_calls": 0
+          }
+        }
+      ],
+      "operating_point": {
+        "concurrency": 32,
+        "companies_per_minute": 657.8,
+        "note": "rule: smallest concurrency with >=90% of best throughput (657.8/min) among runs with CPU<=0.85 core and failure rate <= baseline+1pp"
+      }
+    }
+  }
+}

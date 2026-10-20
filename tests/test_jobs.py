@@ -276,3 +276,22 @@ async def test_cancel_queued_job(engine):
     assert await jobs.request_cancel(engine.db, info["job_id"])
     st = await jobs.job_status(engine.db, info["job_id"])
     assert st["status"] == "cancelled" and st["counts"]["skipped"] == 1
+
+
+async def test_shutdown_grace_expiry_cancels_and_requeues(fixtures):
+    eng = await fresh_engine(fixtures, global_concurrency=2, queue_size=4, claim_batch_size=2, job_heartbeat_seconds=1,
+                             respect_robots=False, shutdown_grace_seconds=0.1)
+    try:
+        slow = [s for s in fixtures.state.sites.values() if s.kind == "slow"][:4]
+        info = await jobs.create_job_from_companies(eng.db, eng.settings, [{"website": url_of(fixtures, s)} for s in slow], requested=["company_name"])
+        w = Worker(eng)
+        t = asyncio.create_task(w.run(once=True))
+        await asyncio.sleep(0.6)                      # requests (1.2 s each) are in flight
+        w.request_stop()
+        await asyncio.wait_for(t, 10)
+        st = await jobs.job_status(eng.db, info["job_id"])
+        assert st["status"] == "queued" and st["counts"]["running"] == 0 and st["counts"]["queued"] == 4
+        await run_worker(eng)
+        assert (await jobs.job_status(eng.db, info["job_id"]))["counts"]["succeeded"] == 4
+    finally:
+        await eng.stop()
