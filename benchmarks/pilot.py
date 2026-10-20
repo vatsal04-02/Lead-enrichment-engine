@@ -496,6 +496,9 @@ def markdown(rep: dict) -> str:
 
 
 async def run(args) -> None:
+    args.database_url = args.database_url or os.environ.get("LE_DATABASE_URL")
+    if not args.database_url:
+        raise PilotError("no database given: set LE_DATABASE_URL (or pass --database-url) to a postgresql:// URL whose database name ends in _pilot")
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     fixtures = args.fixtures
@@ -608,7 +611,7 @@ def main() -> None:
     r = sub.add_parser("run")
     r.add_argument("--sample"); r.add_argument("--fixtures", action="store_true"); r.add_argument("--fixture-sites", type=int, default=40)
     r.add_argument("--confirm-permitted", action="store_true"); r.add_argument("--confirm-sites", type=int, default=-1)
-    r.add_argument("--database-url", default=os.environ.get("LE_DATABASE_URL", "postgresql://enrich@127.0.0.1:55432/enrich_pilot"))
+    r.add_argument("--database-url", default=None, help="postgresql://user:pass@host:port/NAME_pilot (or set LE_DATABASE_URL)")
     r.add_argument("--reset", action="store_true", help="TRUNCATE the (_pilot) database first so every site is fetched fresh")
     r.add_argument("--concurrency", type=int, default=2); r.add_argument("--min-delay", type=float, default=3.0)
     r.add_argument("--max-pages", type=int, default=3); r.add_argument("--retries", type=int, default=1)

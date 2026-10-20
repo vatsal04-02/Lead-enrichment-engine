@@ -56,6 +56,8 @@ handler (graceful shutdown is tested through `Worker.request_stop`).
 
 ## 4. Commands to run the pilot on your own computer
 
+> Superseded by `docs/STAGE5_PILOT_GUIDE.md` (Windows/PowerShell, per-company review sheet, `score --review`). The `score --audit` flow below only applies to fixture runs.
+
 ```bash
 git checkout claude/epic-shannon-areldd && python -m venv .venv && . .venv/bin/activate
 pip install -e '.[dev,browser,ai]'                 # browser/ai optional; `playwright install chromium` if you want Tier 4

@@ -115,22 +115,22 @@ Without AI/browser configured the engine runs Tiers 1–3 and reports fields the
 ## Live pilot (20–50 hand-picked, permitted sites)
 
 `benchmarks/pilot.py` is the only supported way to contact real sites for evaluation. It cannot be pointed at arbitrary
-websites (see its docstring for every guard rail). Steps, all on your own machine:
+websites (see its docstring for every guard rail). **Windows/PowerShell step-by-step: `docs/STAGE5_PILOT_GUIDE.md`.**
+Templates: `benchmarks/templates/pilot_input.csv` (input), `benchmarks/templates/pilot_review.csv` (review sheet header),
+`docs/templates/PILOT_RESULTS_TEMPLATE.md` (results record). Linux/macOS shape of the same flow:
 
 ```bash
 createdb enrich_pilot                                   # database name MUST end in _pilot (the pilot truncates it with --reset)
-cp benchmarks/templates/pilot_input.csv my_sites.csv    # fill in 20-50 rows: domain, name, permission_basis, reviewed_by
-python -m benchmarks.pilot validate --sample my_sites.csv                # offline check, no requests
-export LE_USER_AGENT="YourBot/1.0 (+https://your.site/bot; ops@your.site)"
-export LE_DATABASE_URL=postgresql://USER@HOST/enrich_pilot
-python -m benchmarks.pilot run --sample my_sites.csv --confirm-permitted --confirm-sites <N> --reset
-#   optional: --allow-browser --browser-executable /path/to/chromium   --ai (needs ANTHROPIC_API_KEY) --ai-price-in X --ai-price-out Y
-# open benchmarks/results/pilot-<ts>-audit.csv, fill the `verdict` column (correct|incorrect|unsure) by checking each source_url
-python -m benchmarks.pilot score --audit benchmarks/results/pilot-<ts>-audit.csv
+export LE_DATABASE_URL=postgresql://USER@HOST/enrich_pilot LE_USER_AGENT="YourBot/1.0 (+https://your.site/bot; ops@your.site)"
+mkdir -p pilot_out && cp benchmarks/templates/pilot_input.csv pilot_out/pilot_input.csv    # fill in 20-50 rows
+python -m benchmarks.pilot validate --sample pilot_out/pilot_input.csv                    # offline
+python -m benchmarks.pilot run --sample pilot_out/pilot_input.csv --confirm-permitted --confirm-sites N --reset --out-dir pilot_out/run1
+# fill the verdict columns of pilot_out/run1/pilot-<ts>-review.csv by checking each source URL, then:
+python -m benchmarks.pilot score --review pilot_out/run1/pilot-<ts>-review.csv --run-json pilot_out/run1/pilot-<ts>.json
 ```
 
-Outputs next to the report: `*-provenance.csv` (every value with source URL/method/time), `*-fetch-log.jsonl` (every request),
-`*-audit.csv` (stratified, seeded sample for the human check). Every metric is labelled MEASURED / ESTIMATED / UNKNOWN.
+Outputs: report (`.md/.json`, every metric labelled MEASURED / ESTIMATED / UNKNOWN), `*-review.csv` (one pre-filled row per
+company for the human check), `*-provenance.csv` (every value with source URL/method/time), `*-fetch-log.jsonl` (every request).
 
 ## Jobs, recovery, budgets
 

@@ -271,3 +271,14 @@ def test_ai_flags_fail_before_any_site_is_contacted(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="ai-price-in"):
         asyncio.run(pilot.run(argparse.Namespace(**base)))
     assert not started
+
+
+def test_database_url_has_no_silent_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("LE_DATABASE_URL", raising=False)
+    monkeypatch.setattr(pilot, "Engine", lambda *a, **k: (_ for _ in ()).throw(AssertionError("engine must not start")))
+    a = argparse.Namespace(sample=None, fixtures=True, fixture_sites=3, confirm_permitted=False, confirm_sites=-1, database_url=None,
+                           reset=False, concurrency=1, min_delay=0.0, max_pages=3, retries=1, max_seconds=10, allow_browser=False,
+                           browser_executable="", ai=False, ai_model="m", ai_price_in=None, ai_price_out=None,
+                           compute_usd_per_hour=0.0, audit_per_field=5, out_dir=str(tmp_path))
+    with pytest.raises(SystemExit, match="LE_DATABASE_URL"):
+        asyncio.run(pilot.run(a))
