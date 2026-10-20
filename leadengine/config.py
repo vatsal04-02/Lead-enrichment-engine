@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     ai_provider: str = ""                # "" (disabled) | "anthropic"
     ai_model: str = "claude-haiku-5-5"
     ai_max_input_chars: int = 12000
-    ai_max_output_tokens: int = 1024
+    ai_max_output_tokens: int = 2048     # includes any thinking tokens; too low truncates the JSON (reply is then discarded)
     ai_price_in_per_mtok: float = 0.10   # USD; set to your model's price
     ai_price_out_per_mtok: float = 0.50
     ai_timeout: float = 30.0

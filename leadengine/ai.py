@@ -25,6 +25,7 @@ class LLMResponse:
     text: str
     tokens_in: int = 0
     tokens_out: int = 0
+    stop_reason: str = "end_turn"
 
 
 class LLMProvider(Protocol):
@@ -46,7 +47,7 @@ class AnthropicProvider:
             output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
         )
         text = next((b.text for b in resp.content if b.type == "text"), "")
-        return LLMResponse(text, resp.usage.input_tokens, resp.usage.output_tokens)
+        return LLMResponse(text, resp.usage.input_tokens, resp.usage.output_tokens, resp.stop_reason or "")
 
 
 def make_provider(settings: Settings) -> Optional[LLMProvider]:
@@ -161,6 +162,8 @@ class AIExtractor:
             resp = await self.provider.complete_json(SYSTEM, user, build_schema(fields), self.s.ai_max_output_tokens)
         except Exception as e:           # provider/network failure: leave fields missing
             return AIResult(error=f"provider_error:{type(e).__name__}")
+        if resp.stop_reason != "end_turn":     # max_tokens (truncated), refusal, ...: never trust partial output
+            return AIResult(tokens_in=resp.tokens_in, tokens_out=resp.tokens_out, error=f"stop_reason:{resp.stop_reason}")
         res = validate_response(resp.text, fields, sent)
         res.tokens_in, res.tokens_out = resp.tokens_in, resp.tokens_out
         return res

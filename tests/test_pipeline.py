@@ -409,3 +409,22 @@ async def test_worker_concurrency_and_queue_are_bounded(fixtures):
             assert (await (await c.execute("SELECT count(*) n FROM job_items WHERE status='succeeded' OR status='failed'")).fetchone())["n"] == 40
     finally:
         await eng.stop()
+
+
+async def test_ai_truncated_or_refused_replies_are_discarded_even_if_they_parse(fixtures):
+    s = site_of(fixtures, "prose_only")
+    good = json.dumps({"fields": {"description": {"value": s.description, "quote": s.description}}})
+
+    class Trunc(FakeLLM):
+        async def complete_json(self, system, user, schema, max_tokens):
+            self.calls += 1
+            return LLMResponse(good, 900, 2048, stop_reason="max_tokens")
+    llm = Trunc(good)
+    eng = await _ai_engine(fixtures, llm)
+    try:
+        r = await eng.enricher.enrich(url_of(fixtures, s), requested=["description"])
+        assert (await value(eng, s.host, "description"))["status"] == "not_found"
+        assert r.metrics["tiers"]["tier5_ai"]["note"] == "stop_reason:max_tokens"
+        assert r.metrics["ai_calls"] == 1 and r.metrics["ai_tokens_out"] == 2048     # cost still recorded
+    finally:
+        await eng.stop()
