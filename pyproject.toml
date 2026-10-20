@@ -29,7 +29,7 @@ leadengine = "leadengine.cli:main"
 include = ["leadengine*"]
 
 [tool.setuptools.package-data]
-leadengine = ["schema.sql"]
+leadengine = ["schema.sql", "migrations/*.sql"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

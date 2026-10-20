@@ -34,7 +34,7 @@ async def fresh_engine(fixtures, provider=None, **settings) -> Engine:
     eng = Engine(make_settings(**settings), provider=provider)
     await eng.start()
     async with eng.db.connection() as c:
-        await c.execute("TRUNCATE jobs, companies, http_cache, extraction_cache, enrichment_runs RESTART IDENTITY CASCADE")
+        await c.execute("TRUNCATE jobs, companies, http_cache, extraction_cache, enrichment_runs, fetch_log RESTART IDENTITY CASCADE")
     return eng
 
 

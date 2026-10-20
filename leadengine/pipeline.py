@@ -94,7 +94,7 @@ class Enricher:
                      job_id=None, row_index: int = None) -> EnrichResult:
         t_start = time.monotonic()
         ident = normalize(website)           # raises InvalidDomain
-        run = RunMetrics()
+        run = RunMetrics(job_id=str(job_id) if job_id else None)
         now = datetime.now(timezone.utc)
 
         # ---- Tier 1: existing data

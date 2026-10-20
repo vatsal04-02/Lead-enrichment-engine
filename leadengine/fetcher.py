@@ -177,9 +177,10 @@ def decode_body(raw: bytes, content_type: str) -> str:
 
 class Fetcher:
     def __init__(self, settings: Settings, db: Optional[Database] = None,
-                 client: Optional[httpx.AsyncClient] = None, resolver: Optional[Resolver] = None):
+                 client: Optional[httpx.AsyncClient] = None, resolver: Optional[Resolver] = None, audit=None):
         self.s = settings
         self.db = db
+        self.audit = audit
         if client is None:
             client, resolver = build_http_client(settings)
         self.client = client
@@ -208,6 +209,9 @@ class Fetcher:
         self._inflight[key] = fut
         try:
             res = await self._fetch_uncoalesced(url, run, budget, use_robots, ttl_override)
+            if self.audit is not None:
+                await self.audit.record(job_id=getattr(run, "job_id", None), kind="page" if use_robots else "robots",
+                                        url=url, res=res)
             fut.set_result(res)
             return res
         except Exception as e:      # never leave waiters hanging; surface as a failed fetch
@@ -247,6 +251,9 @@ class Fetcher:
                         if run is not None:
                             run.bytes_downloaded += total
                         hdrs = {"content-type": resp.headers.get("content-type", "application/octet-stream")}
+                        if self.audit is not None:
+                            await self.audit.record(job_id=getattr(run, "job_id", None), kind="subresource", url=current,
+                                                    res=FetchResult(url=current, status=resp.status_code, bytes=total))
                         return resp.status_code, hdrs, b"".join(body)
             except (BlockedDestination, httpx.HTTPError, TimeoutError):
                 return 0, {}, b""

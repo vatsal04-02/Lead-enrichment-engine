@@ -7,6 +7,7 @@ from typing import Optional
 from .ai import AIExtractor, LLMProvider, make_provider
 from .browser import BrowserRenderer
 from .config import Settings, get_settings
+from .audit import FetchAudit
 from .db import Database
 from .fetcher import Fetcher
 from .pipeline import Enricher
@@ -25,6 +26,7 @@ class Engine:
         self.browser: Optional[BrowserRenderer] = None
         self.enricher: Enricher = None  # type: ignore[assignment]
         self._pool: Optional[ProcessPoolExecutor] = None
+        self.audit: Optional[FetchAudit] = None
 
     async def start(self, init_db: bool = True) -> "Engine":
         s = self.settings
@@ -32,7 +34,10 @@ class Engine:
             raise ConfigError("LE_USER_AGENT is still the placeholder. Sites must be able to identify and contact you: "
                               'set e.g. LE_USER_AGENT="YourBot/1.0 (+https://your.site/bot; ops@your.site)"')
         self.db = await Database(s).open(init=init_db)
-        self.fetcher = Fetcher(s, self.db)
+        self.audit = FetchAudit(self.db) if s.fetch_audit_log else None
+        if self.audit:
+            self.audit.start()
+        self.fetcher = Fetcher(s, self.db, audit=self.audit)
         provider = self._provider or make_provider(s)
         ai = AIExtractor(s, provider) if provider else None
         self.browser = BrowserRenderer(s, self.fetcher) if s.browser_enabled else None
@@ -45,6 +50,8 @@ class Engine:
             await self.browser.aclose()
         if self.fetcher:
             await self.fetcher.aclose()
+        if getattr(self, "audit", None):
+            await self.audit.aclose()
         if self._pool:
             self._pool.shutdown(wait=False, cancel_futures=True)
         if self.db:

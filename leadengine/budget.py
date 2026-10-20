@@ -98,6 +98,7 @@ class TierStat:
 @dataclass
 class RunMetrics:
     """Measurements for one company run; becomes one enrichment_runs row."""
+    job_id: Optional[str] = None    # for the audit log
     http_requests: int = 0          # network requests actually sent (incl. retries, robots)
     http_cache_hits: int = 0
     parse_cache_hits: int = 0

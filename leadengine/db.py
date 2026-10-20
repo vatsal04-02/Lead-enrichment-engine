@@ -36,10 +36,24 @@ class Database:
         return self.pool.connection()
 
     async def init_schema(self) -> None:
-        sql = resources.files("leadengine").joinpath("schema.sql").read_text()
+        """Baseline (idempotent schema.sql) then numbered migrations, each applied exactly once.
+
+        Strategy: migrations are additive and forward-only (new tables/columns/indexes). They are recorded in
+        schema_migrations and run under an advisory lock inside one transaction, so concurrent starts are safe.
+        Destructive changes (drops, type rewrites) must never ship as an automatic migration."""
+        baseline = resources.files("leadengine").joinpath("schema.sql").read_text()
+        migrations = sorted((f for f in resources.files("leadengine.migrations").iterdir() if f.name.endswith(".sql")),
+                            key=lambda f: f.name)
         async with self.pool.connection() as conn:
             await conn.execute("SELECT pg_advisory_xact_lock(%s)", (SCHEMA_LOCK_ID,))
-            await conn.execute(sql)
+            await conn.execute(baseline)
+            await conn.execute("""CREATE TABLE IF NOT EXISTS schema_migrations (
+                                      version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
+            done = {r["version"] for r in await (await conn.execute("SELECT version FROM schema_migrations")).fetchall()}
+            for f in migrations:
+                if f.name not in done:
+                    await conn.execute(f.read_text())
+                    await conn.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (f.name,))
 
     async def pool_pressure(self) -> float:
         """0..1 — fraction of pool in use; used for backpressure."""
