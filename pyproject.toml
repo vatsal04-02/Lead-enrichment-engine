@@ -1,0 +1,37 @@
+[project]
+name = "leadengine"
+version = "0.1.0"
+description = "Cost-aware, source-attributed company enrichment engine (async HTTP, PostgreSQL jobs, CSV)"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27",
+  "beautifulsoup4>=4.12",
+  "lxml>=5",
+  "psycopg[binary,pool]>=3.2",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "tldextract>=5",
+  "dnspython>=2.6",
+  "charset-normalizer>=3",
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.44"]
+ai = ["anthropic>=1.0"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+leadengine = "leadengine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["leadengine*"]
+
+[tool.setuptools.package-data]
+leadengine = ["schema.sql"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
