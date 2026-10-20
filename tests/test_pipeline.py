@@ -67,9 +67,9 @@ async def test_reprocessing_is_idempotent_and_skips_extraction(engine, fixtures)
     async with engine.db.connection() as c:
         n = (await (await c.execute("SELECT count(*) n FROM company_fields WHERE field='email'")).fetchone())["n"]
     assert n == 1
-    # same company via a different spelling of the URL => same identity
-    await engine.enricher.enrich(f"http://WWW.{s.host}:{fixtures.port}/about", requested=REQ)
-    assert await count(engine, "companies") == 2 or True      # www. host differs only if registrable differs
+    # same company via a different spelling of the URL => same identity, still no duplicate record
+    r3 = await engine.enricher.enrich(f"HTTP://{s.host.upper()}:{fixtures.port}/about?x=1", requested=REQ)
+    assert r3.outcome == "cached" and await count(engine, "companies") == 1
 
 
 async def test_force_refresh_keeps_old_value_when_refresh_finds_nothing(engine, fixtures):
@@ -260,3 +260,43 @@ async def test_ai_budget_is_enforced(fixtures):
         assert llm.calls == 0 and "ai_calls" in b.exhausted_reasons
     finally:
         await eng.stop()
+
+
+async def test_js_shell_needs_browser_tier_and_is_not_used_otherwise(fixtures):
+    s = site_of(fixtures, "js_shell")
+    # without the browser tier the JS-only content is simply missing (never invented)
+    eng = await fresh_engine(fixtures, browser_enabled=False)
+    try:
+        await eng.enricher.enrich(url_of(fixtures, s), requested=["company_name", "email", "phone"])
+        assert (await value(eng, s.host, "email"))["status"] == "not_found"
+    finally:
+        await eng.stop()
+    eng = await fresh_engine(fixtures, browser_enabled=True)
+    try:
+        r = await eng.enricher.enrich(url_of(fixtures, s), requested=["company_name", "email", "phone"])
+        if eng.browser.available is False:
+            pytest.skip(f"chromium unavailable: {eng.browser.last_error}")
+        assert r.metrics["browser_ops"] == 1
+        assert (await value(eng, s.host, "email"))["value"] == s.email
+        assert (await value(eng, s.host, "phone"))["value"] == s.phone
+        assert (await value(eng, s.host, "email"))["tier"] == "tier4_browser"
+        # server-rendered sites never touch the browser
+        p = site_of(fixtures, "plain")
+        r2 = await eng.enricher.enrich(url_of(fixtures, p), requested=["company_name", "email", "phone"])
+        assert r2.metrics["browser_ops"] == 0
+    finally:
+        await eng.stop()
+
+
+async def test_browser_subrequests_cannot_reach_private_hosts(fixtures):
+    """All browser traffic is fulfilled by the guarded fetcher: a page that tries to load an
+    internal address gets nothing."""
+    from leadengine.fetcher import Fetcher
+    f = Fetcher(make_settings(host_overrides=""), db=None)       # guard fully on
+    try:
+        status, _, body = await f.fetch_subresource("http://169.254.169.254/latest/meta-data/")
+        assert (status, body) == (0, b"")
+        status, _, body = await f.fetch_subresource(f"http://127.0.0.1:{fixtures.port}/")
+        assert (status, body) == (0, b"")
+    finally:
+        await f.aclose()

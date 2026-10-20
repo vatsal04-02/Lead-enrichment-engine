@@ -15,7 +15,9 @@ def make_settings(**kw) -> Settings:
     base = dict(database_url=DB_URL, host_overrides="*.fixture.test=127.0.0.1",
                 per_domain_min_delay=0.0, per_domain_concurrency=4, http_max_retries=2, backoff_base=0.05,
                 backoff_max=0.2, browser_enabled=False, user_agent="LeadEnrichmentTest/1.0",
-                allowed_ports="80,443", ai_provider="")
+                allowed_ports="80,443", ai_provider="",
+                browser_executable=os.environ.get("LE_BROWSER_EXECUTABLE") or
+                ("/opt/pw-browsers/chromium" if os.path.exists("/opt/pw-browsers/chromium") else None))
     base.update(kw)
     return Settings(**base)
 

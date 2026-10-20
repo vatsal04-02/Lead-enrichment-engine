@@ -46,7 +46,8 @@ class BrowserRenderer:
                 from playwright.async_api import async_playwright
                 self._pw = await async_playwright().start()
                 args = ["--no-sandbox"] if hasattr(os, "geteuid") and os.geteuid() == 0 else []
-                self._browser = await self._pw.chromium.launch(headless=True, args=args)
+                self._browser = await self._pw.chromium.launch(
+                    headless=True, args=args, executable_path=self.s.browser_executable or None)
                 self.available = True
             except Exception as e:  # not installed / no browser binary
                 self.available = False

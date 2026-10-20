@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     browser_enabled: bool = True
     browser_concurrency: int = 1
     browser_timeout: float = 20.0
+    browser_executable: Optional[str] = None   # e.g. /opt/pw-browsers/chromium when Playwright's own build isn't installed
     ai_provider: str = ""                # "" (disabled) | "anthropic"
     ai_model: str = "claude-haiku-5-5"
     ai_max_input_chars: int = 12000

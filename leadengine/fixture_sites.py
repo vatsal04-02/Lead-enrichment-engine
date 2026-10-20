@@ -181,7 +181,7 @@ def render(s: Site, path: str, state: FixtureState) -> tuple[int, str, dict, str
         elif k == "contact_only":
             body = _page(f"Welcome", "", f"<h1>Welcome</h1>{_nav()}{FILLER}")
         elif k == "js_shell":
-            body = _page("Loading", '<script src="/app.js"></script><script src="/vendor.js"></script>',
+            body = _page("Loading", '<script src="/app.js" defer></script><script src="/vendor.js" defer></script>',
                          '<div id="root"></div><noscript>Please enable JavaScript</noscript>')
         elif k == "prose_only":
             body = _page("Welcome", "", f"<h1>Welcome</h1>{_nav()}<p>{s.description} Visit us at {s.address}. "
@@ -273,3 +273,20 @@ class FixtureServer:
             self._server.should_exit = True
         if self._thread:
             self._thread.join(timeout=5)
+
+
+def main() -> None:
+    """Run the fixture server as its own process (benchmarks use this so it doesn't share the GIL with the engine)."""
+    import argparse
+    ap = argparse.ArgumentParser(description="Serve synthetic company sites c0..cN-1.fixture.test")
+    ap.add_argument("--sites", type=int, default=300)
+    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--latency-ms", type=float, default=0.0, help="simulated per-response network latency")
+    ap.add_argument("--cycle", action="store_true", help="round-robin kinds instead of the benchmark mix")
+    a = ap.parse_args()
+    state = FixtureState(a.sites, None, a.latency_ms, a.cycle)
+    uvicorn.run(build_app(state), host="127.0.0.1", port=a.port, log_level="warning", access_log=False)
+
+
+if __name__ == "__main__":
+    main()
