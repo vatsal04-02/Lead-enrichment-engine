@@ -53,3 +53,24 @@ def site_of(fixtures, kind: str, nth: int = 0):
 
 def url_of(fixtures, site) -> str:
     return fixtures.url(site.host)
+
+
+# ---------------------------------------------------------------- ScrapeGraphAI backend test support
+SG_PYTHON = os.environ.get("LE_TEST_SCRAPEGRAPH_PYTHON", "")
+
+
+def sg_available() -> bool:
+    if not SG_PYTHON or not os.path.exists(SG_PYTHON):
+        return False
+    import subprocess
+    r = subprocess.run([SG_PYTHON, "-c", "import scrapegraphai"], capture_output=True, timeout=60)
+    return r.returncode == 0
+
+
+def sg_kwargs(stub, **over) -> dict:
+    """Engine settings for the scrapegraph backend against a local STUB model server (never a real model)."""
+    kw = dict(extraction_backend="scrapegraph", scrapegraph_enabled=True, scrapegraph_provider="ollama",
+              scrapegraph_model="stubmodel", scrapegraph_base_url=stub.base_url, scrapegraph_python=SG_PYTHON,
+              scrapegraph_request_timeout=20, ai_provider="")
+    kw.update(over)
+    return kw

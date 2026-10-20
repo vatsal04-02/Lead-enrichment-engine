@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-KINDS = ("pages", "ai_calls", "browser_ops")
+KINDS = ("pages", "ai_calls", "browser_ops", "ai_tokens")
 
 
 @dataclass
@@ -17,11 +17,13 @@ class Budget:
     pages: int = 0              # 0 = unlimited for every limit
     ai_calls: int = 0
     browser_ops: int = 0
+    ai_tokens: int = 0
     seconds: int = 0
     est_cost_usd: float = 0.0
     spent_pages: int = 0
     spent_ai_calls: int = 0
     spent_browser_ops: int = 0
+    spent_ai_tokens: int = 0
     spent_cost_usd: float = 0.0
     spent_seconds_prior: float = 0.0      # time used by earlier worker sessions of this job
     _t0: float = field(default_factory=time.monotonic)
@@ -30,12 +32,13 @@ class Budget:
     @classmethod
     def from_config(cls, cfg: dict, spent: Optional[dict] = None) -> "Budget":
         b = cls(pages=int(cfg.get("pages", 0)), ai_calls=int(cfg.get("ai_calls", 0)),
-                browser_ops=int(cfg.get("browser_ops", 0)), seconds=int(cfg.get("seconds", 0)),
+                browser_ops=int(cfg.get("browser_ops", 0)), ai_tokens=int(cfg.get("ai_tokens", 0)), seconds=int(cfg.get("seconds", 0)),
                 est_cost_usd=float(cfg.get("est_cost_usd", 0.0)))
         if spent:
             b.spent_pages = int(spent.get("pages", 0))
             b.spent_ai_calls = int(spent.get("ai_calls", 0))
             b.spent_browser_ops = int(spent.get("browser_ops", 0))
+            b.spent_ai_tokens = int(spent.get("ai_tokens", 0))
             b.spent_cost_usd = float(spent.get("est_cost_usd", 0.0))
             b.spent_seconds_prior = float(spent.get("seconds", 0.0))
         return b
@@ -51,6 +54,10 @@ class Budget:
             return "ai_calls"
         if kind == "browser_ops" and self.browser_ops and self.spent_browser_ops + n > self.browser_ops:
             return "browser_ops"
+        if kind == "ai_tokens" and self.ai_tokens and self.spent_ai_tokens + n > self.ai_tokens:
+            return "ai_tokens"
+        if kind in ("ai_calls", "ai_tokens") and self.ai_tokens and self.spent_ai_tokens >= self.ai_tokens:
+            return "ai_tokens"
         if self.seconds and self.elapsed >= self.seconds:
             return "seconds"
         if self.est_cost_usd and self.spent_cost_usd >= self.est_cost_usd:
@@ -71,6 +78,8 @@ class Budget:
             self.spent_ai_calls += n
         elif kind == "browser_ops":
             self.spent_browser_ops += n
+        elif kind == "ai_tokens":
+            self.spent_ai_tokens += n
 
     def add_cost(self, usd: float) -> None:
         self.spent_cost_usd += usd
@@ -81,7 +90,7 @@ class Budget:
 
     def snapshot(self) -> dict:
         return {"pages": self.spent_pages, "ai_calls": self.spent_ai_calls,
-                "browser_ops": self.spent_browser_ops, "est_cost_usd": round(self.spent_cost_usd, 6),
+                "browser_ops": self.spent_browser_ops, "ai_tokens": self.spent_ai_tokens, "est_cost_usd": round(self.spent_cost_usd, 6),
                 "seconds": round(self.elapsed, 1), "exhausted": sorted(self.exhausted_reasons)}
 
 
@@ -115,6 +124,8 @@ class RunMetrics:
     cost_browser_usd: float = 0.0
     tiers: dict = field(default_factory=dict)
     pages_by_host: dict = field(default_factory=dict)
+    # model-backed extraction (backend=scrapegraph); local and external usage are kept apart
+    llm: dict = field(default_factory=dict)
 
     def tier(self, name: str) -> TierStat:
         return self.tiers.setdefault(name, TierStat())

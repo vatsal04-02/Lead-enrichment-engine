@@ -71,6 +71,28 @@ class Settings(BaseSettings):
     email_dns_check: bool = False        # MX/A lookup for email domains (recorded as domain_mx)
     parse_workers: int = 0               # 0 = parse in the default thread pool; N>0 = N parser processes
 
+    # --- optional alternative extraction backend: ScrapeGraphAI (see docs/SCRAPEGRAPH_INTEGRATION.md) ---
+    # Disabled by default. BOTH extraction_backend=scrapegraph AND scrapegraph_enabled=true are required, plus an explicit
+    # provider and model: there is no default model and no fallback to any other provider.
+    extraction_backend: str = "inhouse"      # "inhouse" (default, unchanged) | "scrapegraph"
+    scrapegraph_enabled: bool = False
+    scrapegraph_python: Optional[str] = None  # interpreter (>=3.12) that has scrapegraphai installed; default = this interpreter
+    scrapegraph_provider: str = ""            # "ollama" (local) | "openai" (OpenAI-compatible endpoint) | "anthropic"
+    scrapegraph_model: str = ""
+    scrapegraph_base_url: Optional[str] = None  # ollama default http://127.0.0.1:11434; required for openai-compatible hosts
+    scrapegraph_api_key_env: str = ""         # NAME of the environment variable holding the key (never the key itself)
+    scrapegraph_max_calls_per_company: int = Field(2, ge=1, le=20)
+    scrapegraph_max_pages_per_company: int = Field(2, ge=1, le=6)
+    scrapegraph_max_input_chars: int = Field(12000, ge=1000, le=200000)
+    scrapegraph_max_output_tokens: int = Field(512, ge=64, le=8192)
+    scrapegraph_model_tokens: int = Field(8192, ge=1024)   # context size handed to the library (chunking)
+    scrapegraph_max_worker_response_bytes: int = Field(200_000, ge=1024)
+    scrapegraph_request_timeout: float = Field(60.0, gt=0, le=600)
+    scrapegraph_retries: int = Field(0, ge=0, le=2)
+    scrapegraph_workers: int = Field(1, ge=1, le=8)        # concurrent model requests (worker processes)
+    scrapegraph_price_in_per_mtok: float = Field(0.0, ge=0)   # USD per million tokens; applies to EXTERNAL providers only
+    scrapegraph_price_out_per_mtok: float = Field(0.0, ge=0)
+
     # --- freshness ---
     default_freshness_days: int = 90
     freshness_days: str = ""             # "email=60,address=180"
@@ -92,6 +114,7 @@ class Settings(BaseSettings):
     # --- default per-job budgets (0 = unlimited) ---
     budget_pages: int = 100000
     budget_ai_calls: int = 1000
+    budget_ai_tokens: int = 2_000_000    # model tokens (in+out) per job, any provider; 0 = unlimited
     budget_browser_ops: int = 200
     budget_seconds: int = 21600
     budget_est_cost_usd: float = 10.0
@@ -110,6 +133,8 @@ class Settings(BaseSettings):
         if self.job_heartbeat_seconds * 2 > self.job_lease_seconds:
             raise ValueError("LE_JOB_HEARTBEAT_SECONDS must be at most half of LE_JOB_LEASE_SECONDS "
                              "(a missed heartbeat would let another worker steal live work)")
+        if self.extraction_backend not in ("inhouse", "scrapegraph"):
+            raise ValueError("LE_EXTRACTION_BACKEND must be 'inhouse' or 'scrapegraph'")
         if self.http_max_keepalive > self.http_max_connections:
             self.http_max_keepalive = self.http_max_connections
         return self

@@ -21,6 +21,8 @@ from psycopg.types.json import Jsonb
 
 from . import store
 from .ai import AIExtractor
+from .backends.base import BackendUnavailable, PageInput
+from .backends.session import CompanyLLMSession
 from .browser import BrowserRenderer
 from .budget import Budget, RunMetrics
 from .config import Settings
@@ -65,9 +67,10 @@ def _parse(html: str, url: str, kind: str, key: str) -> dict:
 class Enricher:
     def __init__(self, settings: Settings, db: Database, fetcher: Fetcher,
                  ai: Optional[AIExtractor] = None, browser: Optional[BrowserRenderer] = None,
-                 parse_executor: Optional[Executor] = None):
+                 parse_executor: Optional[Executor] = None, llm_backend=None):
         self.s, self.db, self.fetcher, self.ai, self.browser = settings, db, fetcher, ai, browser
         self.parse_executor = parse_executor
+        self.llm_backend = llm_backend      # None = the default in-house engine, byte-for-byte the previous behaviour
 
     # ---------------------------------------------------------------- parsing
     async def _parse_page(self, res: FetchResult, kind: str, key: str, run: RunMetrics) -> PageExtraction:
@@ -121,6 +124,8 @@ class Enricher:
             return await self._finish(cid, ident, requested, plan, run, "cached", t_start, budget, job_id, row_index,
                                       record_outcome=False)
 
+        sess = CompanyLLMSession(self.llm_backend, self.s, self.db, run, budget) if self.llm_backend else None
+
         # ---- Tier 2: homepage
         picks_src: list[Candidate] = []
         pages_text: list[tuple[str, str]] = []
@@ -147,7 +152,9 @@ class Enricher:
             return await self._handle_home_failure(cid, ident, requested, plan, run, home, t_start, budget, job_id, row_index)
 
         ex = await self._parse_page(home, "home", ident.key, run)
-        picks_src += ex.candidates
+        picks_src += await self._cands(ex, home, "home", sess, plan.to_extract)
+        if sess is not None and sess.fatal:
+            return await self._llm_failed(sess, cid, ident, requested, plan, run, t_start, budget, job_id, row_index)
         pages_text.append((home.final_url or home.url, ex.visible_text))
         link_map = ex.links
         home_js_hint = ex.js_hint
@@ -191,7 +198,9 @@ class Enricher:
                 continue
             pages_used += 1
             pex = await self._parse_page(res, kind, ident.key, run)
-            picks_src += pex.candidates
+            picks_src += await self._cands(pex, res, kind, sess, remaining)
+            if sess is not None and sess.fatal:
+                return await self._llm_failed(sess, cid, ident, requested, plan, run, t_start, budget, job_id, row_index)
             pages_text.append((res.final_url or res.url, pex.visible_text))
         t3.fields_found = len(self._found(picks_src, plan, ident)) - t2.fields_found
 
@@ -208,7 +217,12 @@ class Enricher:
             t4.requests = run.http_requests - before
             if rr.html:
                 rex = _extract_inline(rr.html, homepage_url, ident.key)
-                picks_src += [_tag(c, "tier4_browser") for c in rex.candidates]
+                if sess is None:
+                    picks_src += [_tag(c, "tier4_browser") for c in rex.candidates]
+                else:
+                    picks_src += await sess.process_page(PageInput(homepage_url, "home", rr.html, ""), remaining)
+                    if sess.fatal:
+                        return await self._llm_failed(sess, cid, ident, requested, plan, run, t_start, budget, job_id, row_index)
                 pages_text.insert(0, (homepage_url, rex.visible_text))
                 for kind, urls in rex.links.items():
                     link_map.setdefault(kind, urls)
@@ -221,7 +235,9 @@ class Enricher:
         remaining = [f for f in plan.to_extract if f not in self._found(picks_src, plan, ident)
                      and FIELDS[f].ai_eligible]
         ai_note = ""
-        if remaining and self.ai and budget_allows(budget, "ai_calls"):
+        if sess is not None:
+            pass      # the model-backed backend replaces tier 5; never two model paths for one company
+        elif remaining and self.ai and budget_allows(budget, "ai_calls"):
             t5 = run.tier("tier5_ai")
             t5.attempted = True
             t0 = time.monotonic()
@@ -243,8 +259,12 @@ class Enricher:
         elif remaining and self.ai and not budget_allows(budget, "ai_calls"):
             run.tier("tier5_ai").note = "budget_exhausted"
 
+        if sess is not None and sess.had_errors and not sess.fields_extracted:
+            # the model never produced anything usable: do NOT record "searched, not found" - that would suppress retries
+            return await self._llm_failed(sess, cid, ident, requested, plan, run, t_start, budget, job_id, row_index)
+
         # ---- persist atomically
-        await self._persist(cid, ident, plan, rows, picks_src, home, website_ok, now, run)
+        await self._persist(cid, ident, plan, rows, picks_src, home, website_ok, now, run, sess)
         outcome_fields = await self._reload_score(cid, requested)
         outcome = ("enriched" if outcome_fields["completeness"] >= 0.999 else
                    "partial" if outcome_fields["fields_present"] else "no_data")
@@ -252,10 +272,26 @@ class Enricher:
                                   score=outcome_fields)
 
     # ---------------------------------------------------------------- helpers
+    async def _cands(self, ex: PageExtraction, res: FetchResult, kind: str, sess, wanted: list[str]) -> list[Candidate]:
+        """Default engine: the deterministic candidates (unchanged). Model backend: candidates grounded in this page."""
+        if sess is None:
+            return ex.candidates
+        return await sess.process_page(PageInput(res.final_url or res.url, kind, res.text, res.content_hash), list(wanted))
+
+    async def _llm_failed(self, sess, cid, ident, requested, plan, run, t_start, budget, job_id, row_index) -> EnrichResult:
+        if sess.fatal is not None:
+            kind, msg, transient = sess.fatal.kind, str(sess.fatal), True
+        else:
+            e = sess.errors[0]
+            kind, msg = e["kind"], f"{e['kind']} on {e['page']}: {e['message']}"
+            transient = e["kind"] in ("model_timeout", "worker_crash", "model_error")
+        return await self._finish(cid, ident, requested, plan, run, "failed", t_start, budget, job_id, row_index,
+                                  error_kind=kind, error=msg[:300], transient=transient, record_outcome=False)
+
     def _found(self, cands: list[Candidate], plan: Plan, ident: Identity) -> set[str]:
         return {f for f in pick_best(cands, ident.key) if f in plan.to_extract}
 
-    async def _persist(self, cid, ident, plan, rows, cands, home, website_ok, now, run) -> None:
+    async def _persist(self, cid, ident, plan, rows, cands, home, website_ok, now, run, sess=None) -> None:
         picks = pick_best(cands, ident.key)
         all_by_field = cands
         mx_cache: dict[str, Optional[bool]] = {}
@@ -268,6 +304,8 @@ class Enricher:
                     best, alts = picks[f]
                     checks = format_checks(f, spec.kind, best.value, ident.key)
                     checks["published_on_source"] = True
+                    if sess is not None:       # grounded in the fetched page; state kept as a string so format_valid() ignores it
+                        checks["extraction_state"] = "conflict" if alts else "extracted"
                     vstatus, vmethod = verify(f, best, [x for x in all_by_field if x.field == f])
                     if f == "email" and self.s.email_dns_check:
                         dom = best.value.rsplit("@", 1)[-1].lower()
@@ -287,13 +325,18 @@ class Enricher:
                 elif existing and existing["status"] == "found":
                     await store.defer_refresh(c, cid, f, now + timedelta(days=self.s.not_found_retry_days),
                                               "refresh found nothing; previous value kept")
+                elif sess is not None and sess.had_errors:
+                    continue          # an incomplete model run proves nothing about absence: leave the field undecided
                 else:
+                    st = sess.state_for(f) if sess is not None else None
                     await store.save_field(
                         c, cid, f, status="not_found", value=None, source_url=None, method=None, tier=None,
-                        prior=None, verification_status="unverified", verification_method=None, checks={},
+                        prior=None, verification_status="unverified", verification_method=None,
+                        checks={"extraction_state": st["state"]} if st else {},
                         source_hash=None, alternates=[],
                         refresh_after=now + timedelta(days=self.s.not_found_retry_days), existing=existing,
-                        note="searched; not present on fetched pages")
+                        note=(f"{st['state']}: {st['reason']}"[:200] if st and (st["state"] != "missing")
+                              else "searched; not present on fetched pages"))
             # website: recorded from input, verified by reachability + domain match
             await store.save_field(
                 c, cid, "website", status="found", value=home.final_url or home.url, source_url=home.url,
@@ -399,6 +442,7 @@ def _metrics_json(run: RunMetrics, cost_total: float) -> dict:
         "cost": {"ai_tokens_in": run.ai_tokens_in, "ai_tokens_out": run.ai_tokens_out,
                  "browser_seconds": round(run.browser_seconds, 3), "total_usd_estimated": round(cost_total, 8), "http_usd_estimated": round(run.cost_http_usd, 8),
                  "ai_usd_estimated": round(run.cost_ai_usd, 8), "browser_usd_estimated": round(run.cost_browser_usd, 8),
+                 "llm": run.llm or None,
                  "basis": "tokens/seconds/requests are measured; USD uses the configured LE_* price settings, "
                           "so every USD figure is an estimate; infrastructure/compute cost excluded"},
     }

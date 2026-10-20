@@ -1,0 +1,170 @@
+category,backend,field,metric,value,label,note
+SYNTHETIC,inhouse,,usable_correct_rate,0.6,SYNTHETIC,company_name correct AND (email or phone) correct vs generator truth
+SYNTHETIC,inhouse,,overall_precision,1.0,SYNTHETIC,
+SYNTHETIC,inhouse,,unsupported_claims_total,0,SYNTHETIC,
+SYNTHETIC,inhouse,,source_attribution_complete,1.0,SYNTHETIC,share of stored values with source_url+method+timestamp AND the value present on that page
+SYNTHETIC,inhouse,,email_mailbox_verified,0,MEASURED,no mailbox verification is performed; e-mail is never marked verified
+SYNTHETIC,inhouse,,failure_rate,0.033,SYNTHETIC,
+SYNTHETIC,inhouse,,latency_ms_p50,29.3,MEASURED,wall time per company inside this run (concurrency applies)
+SYNTHETIC,inhouse,,latency_ms_p95,1040.0,MEASURED,
+SYNTHETIC,inhouse,,http_requests_per_company,3.1,MEASURED,
+SYNTHETIC,inhouse,,pages_per_company,2.93,MEASURED,
+SYNTHETIC,inhouse,,http_retry_rate,0.043,MEASURED,
+SYNTHETIC,inhouse,,wall_seconds,3.77,MEASURED,
+SYNTHETIC,inhouse,,model_calls_per_company,0,MEASURED,no model is used by the in-house engine
+SYNTHETIC,inhouse,,cost_usd_per_usable,0.0,MEASURED,no model; HTTP/compute cost not priced here
+SYNTHETIC,inhouse,company_name,truth_published,40,SYNTHETIC,
+SYNTHETIC,inhouse,company_name,stored,36,SYNTHETIC,
+SYNTHETIC,inhouse,company_name,correct,36,SYNTHETIC,
+SYNTHETIC,inhouse,company_name,incorrect,0,SYNTHETIC,
+SYNTHETIC,inhouse,company_name,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,inhouse,company_name,missing,4,SYNTHETIC,
+SYNTHETIC,inhouse,company_name,coverage,0.6,SYNTHETIC,
+SYNTHETIC,inhouse,company_name,recall,0.9,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,inhouse,company_name,precision,1.0,SYNTHETIC,"wilson95=(0.904, 1.0)"
+SYNTHETIC,inhouse,company_name,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,inhouse,company_name,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,inhouse,description,truth_published,36,SYNTHETIC,
+SYNTHETIC,inhouse,description,stored,36,SYNTHETIC,
+SYNTHETIC,inhouse,description,correct,36,SYNTHETIC,
+SYNTHETIC,inhouse,description,incorrect,0,SYNTHETIC,
+SYNTHETIC,inhouse,description,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,inhouse,description,missing,0,SYNTHETIC,
+SYNTHETIC,inhouse,description,coverage,0.6,SYNTHETIC,
+SYNTHETIC,inhouse,description,recall,1.0,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,inhouse,description,precision,1.0,SYNTHETIC,"wilson95=(0.904, 1.0)"
+SYNTHETIC,inhouse,description,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,inhouse,description,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,inhouse,email,truth_published,55,SYNTHETIC,
+SYNTHETIC,inhouse,email,stored,51,SYNTHETIC,
+SYNTHETIC,inhouse,email,correct,51,SYNTHETIC,
+SYNTHETIC,inhouse,email,incorrect,0,SYNTHETIC,
+SYNTHETIC,inhouse,email,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,inhouse,email,missing,4,SYNTHETIC,
+SYNTHETIC,inhouse,email,coverage,0.85,SYNTHETIC,
+SYNTHETIC,inhouse,email,recall,0.927,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,inhouse,email,precision,1.0,SYNTHETIC,"wilson95=(0.93, 1.0)"
+SYNTHETIC,inhouse,email,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,inhouse,email,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,inhouse,phone,truth_published,51,SYNTHETIC,
+SYNTHETIC,inhouse,phone,stored,47,SYNTHETIC,
+SYNTHETIC,inhouse,phone,correct,47,SYNTHETIC,
+SYNTHETIC,inhouse,phone,incorrect,0,SYNTHETIC,
+SYNTHETIC,inhouse,phone,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,inhouse,phone,missing,4,SYNTHETIC,
+SYNTHETIC,inhouse,phone,coverage,0.783,SYNTHETIC,
+SYNTHETIC,inhouse,phone,recall,0.922,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,inhouse,phone,precision,1.0,SYNTHETIC,"wilson95=(0.924, 1.0)"
+SYNTHETIC,inhouse,phone,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,inhouse,phone,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,inhouse,address,truth_published,21,SYNTHETIC,
+SYNTHETIC,inhouse,address,stored,21,SYNTHETIC,
+SYNTHETIC,inhouse,address,correct,21,SYNTHETIC,
+SYNTHETIC,inhouse,address,incorrect,0,SYNTHETIC,
+SYNTHETIC,inhouse,address,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,inhouse,address,missing,0,SYNTHETIC,
+SYNTHETIC,inhouse,address,coverage,0.35,SYNTHETIC,
+SYNTHETIC,inhouse,address,recall,1.0,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,inhouse,address,precision,1.0,SYNTHETIC,"wilson95=(0.845, 1.0)"
+SYNTHETIC,inhouse,address,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,inhouse,address,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,inhouse,linkedin_url,truth_published,21,SYNTHETIC,
+SYNTHETIC,inhouse,linkedin_url,stored,21,SYNTHETIC,
+SYNTHETIC,inhouse,linkedin_url,correct,21,SYNTHETIC,
+SYNTHETIC,inhouse,linkedin_url,incorrect,0,SYNTHETIC,
+SYNTHETIC,inhouse,linkedin_url,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,inhouse,linkedin_url,missing,0,SYNTHETIC,
+SYNTHETIC,inhouse,linkedin_url,coverage,0.35,SYNTHETIC,
+SYNTHETIC,inhouse,linkedin_url,recall,1.0,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,inhouse,linkedin_url,precision,1.0,SYNTHETIC,"wilson95=(0.845, 1.0)"
+SYNTHETIC,inhouse,linkedin_url,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,inhouse,linkedin_url,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,scrapegraph,,usable_correct_rate,0.6,SYNTHETIC,company_name correct AND (email or phone) correct vs generator truth
+SYNTHETIC,scrapegraph,,overall_precision,1.0,SYNTHETIC,
+SYNTHETIC,scrapegraph,,unsupported_claims_total,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,,source_attribution_complete,1.0,SYNTHETIC,share of stored values with source_url+method+timestamp AND the value present on that page
+SYNTHETIC,scrapegraph,,email_mailbox_verified,0,MEASURED,no mailbox verification is performed; e-mail is never marked verified
+SYNTHETIC,scrapegraph,,failure_rate,0.033,SYNTHETIC,
+SYNTHETIC,scrapegraph,,latency_ms_p50,140.7,MEASURED,wall time per company inside this run (concurrency applies)
+SYNTHETIC,scrapegraph,,latency_ms_p95,1177.1,MEASURED,
+SYNTHETIC,scrapegraph,,http_requests_per_company,3.1,MEASURED,
+SYNTHETIC,scrapegraph,,pages_per_company,2.93,MEASURED,
+SYNTHETIC,scrapegraph,,http_retry_rate,0.043,MEASURED,
+SYNTHETIC,scrapegraph,,wall_seconds,5.58,MEASURED,
+SYNTHETIC,scrapegraph,,model_calls_per_company,1.45,MEASURED,
+SYNTHETIC,scrapegraph,,tokens_in_per_company,1271,MEASURED,
+SYNTHETIC,scrapegraph,,tokens_out_per_company,62,MEASURED,
+SYNTHETIC,scrapegraph,,model_retry_rate,0.0,MEASURED,
+SYNTHETIC,scrapegraph,,model_timeout_rate,0.0,MEASURED,
+SYNTHETIC,scrapegraph,,model_failures,0,MEASURED,
+SYNTHETIC,scrapegraph,,unsupported_values_dropped_before_storage,0,MEASURED,by reason {}
+SYNTHETIC,scrapegraph,,worker_blocked_network_attempts,0,MEASURED,must be 0
+SYNTHETIC,scrapegraph,,cost_usd_per_usable,,UNKNOWN,local inference: no per-token price; hardware/electricity not priced - NOT zero cost
+SYNTHETIC,scrapegraph,,tokens_per_usable,2223,MEASURED,
+SYNTHETIC,scrapegraph,company_name,truth_published,40,SYNTHETIC,
+SYNTHETIC,scrapegraph,company_name,stored,36,SYNTHETIC,
+SYNTHETIC,scrapegraph,company_name,correct,36,SYNTHETIC,
+SYNTHETIC,scrapegraph,company_name,incorrect,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,company_name,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,company_name,missing,4,SYNTHETIC,
+SYNTHETIC,scrapegraph,company_name,coverage,0.6,SYNTHETIC,
+SYNTHETIC,scrapegraph,company_name,recall,0.9,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,scrapegraph,company_name,precision,1.0,SYNTHETIC,"wilson95=(0.904, 1.0)"
+SYNTHETIC,scrapegraph,company_name,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,scrapegraph,company_name,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,scrapegraph,description,truth_published,36,SYNTHETIC,
+SYNTHETIC,scrapegraph,description,stored,36,SYNTHETIC,
+SYNTHETIC,scrapegraph,description,correct,36,SYNTHETIC,
+SYNTHETIC,scrapegraph,description,incorrect,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,description,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,description,missing,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,description,coverage,0.6,SYNTHETIC,
+SYNTHETIC,scrapegraph,description,recall,1.0,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,scrapegraph,description,precision,1.0,SYNTHETIC,"wilson95=(0.904, 1.0)"
+SYNTHETIC,scrapegraph,description,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,scrapegraph,description,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,scrapegraph,email,truth_published,55,SYNTHETIC,
+SYNTHETIC,scrapegraph,email,stored,51,SYNTHETIC,
+SYNTHETIC,scrapegraph,email,correct,51,SYNTHETIC,
+SYNTHETIC,scrapegraph,email,incorrect,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,email,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,email,missing,4,SYNTHETIC,
+SYNTHETIC,scrapegraph,email,coverage,0.85,SYNTHETIC,
+SYNTHETIC,scrapegraph,email,recall,0.927,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,scrapegraph,email,precision,1.0,SYNTHETIC,"wilson95=(0.93, 1.0)"
+SYNTHETIC,scrapegraph,email,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,scrapegraph,email,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,scrapegraph,phone,truth_published,51,SYNTHETIC,
+SYNTHETIC,scrapegraph,phone,stored,47,SYNTHETIC,
+SYNTHETIC,scrapegraph,phone,correct,47,SYNTHETIC,
+SYNTHETIC,scrapegraph,phone,incorrect,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,phone,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,phone,missing,4,SYNTHETIC,
+SYNTHETIC,scrapegraph,phone,coverage,0.783,SYNTHETIC,
+SYNTHETIC,scrapegraph,phone,recall,0.922,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,scrapegraph,phone,precision,1.0,SYNTHETIC,"wilson95=(0.924, 1.0)"
+SYNTHETIC,scrapegraph,phone,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,scrapegraph,phone,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,scrapegraph,address,truth_published,21,SYNTHETIC,
+SYNTHETIC,scrapegraph,address,stored,21,SYNTHETIC,
+SYNTHETIC,scrapegraph,address,correct,21,SYNTHETIC,
+SYNTHETIC,scrapegraph,address,incorrect,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,address,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,address,missing,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,address,coverage,0.35,SYNTHETIC,
+SYNTHETIC,scrapegraph,address,recall,1.0,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,scrapegraph,address,precision,1.0,SYNTHETIC,"wilson95=(0.845, 1.0)"
+SYNTHETIC,scrapegraph,address,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,scrapegraph,address,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+SYNTHETIC,scrapegraph,linkedin_url,truth_published,21,SYNTHETIC,
+SYNTHETIC,scrapegraph,linkedin_url,stored,21,SYNTHETIC,
+SYNTHETIC,scrapegraph,linkedin_url,correct,21,SYNTHETIC,
+SYNTHETIC,scrapegraph,linkedin_url,incorrect,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,linkedin_url,spurious_not_published,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,linkedin_url,missing,0,SYNTHETIC,
+SYNTHETIC,scrapegraph,linkedin_url,coverage,0.35,SYNTHETIC,
+SYNTHETIC,scrapegraph,linkedin_url,recall,1.0,SYNTHETIC,correct / fields the generator published
+SYNTHETIC,scrapegraph,linkedin_url,precision,1.0,SYNTHETIC,"wilson95=(0.845, 1.0)"
+SYNTHETIC,scrapegraph,linkedin_url,false_positive_rate,0.0,SYNTHETIC,stored value wrong or field not published
+SYNTHETIC,scrapegraph,linkedin_url,unsupported_claims,0,SYNTHETIC,stored value not literally on its attributed source page
+HUMAN_REVIEWED_LIVE,,,accuracy,,UNKNOWN,no audited live sample supplied

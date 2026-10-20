@@ -22,9 +22,10 @@ EXTRACTOR_VERSION = "1"
 # static heuristic priors per method (NOT correctness probabilities)
 METHOD_PRIOR = {"json_ld": 0.9, "microdata": 0.85, "mailto": 0.85, "tel": 0.85, "link": 0.75,
                 "meta": 0.7, "address_tag": 0.6, "title": 0.4, "text_regex": 0.5, "ai_grounded": 0.4,
+               "scrapegraph_llm": 0.4,
                 "input": 0.3}
 METHOD_RANK = {"json_ld": 1, "microdata": 2, "mailto": 2, "tel": 2, "link": 3, "meta": 4,
-               "address_tag": 4, "title": 6, "text_regex": 7, "ai_grounded": 9, "input": 10}
+               "address_tag": 4, "title": 6, "text_regex": 7, "ai_grounded": 9, "scrapegraph_llm": 9, "input": 10}
 
 MAX_LEN = {"company_name": 120, "description": 600, "address": 250, "industry": 120,
            "email": 254, "phone": 40, "founded_year": 4}

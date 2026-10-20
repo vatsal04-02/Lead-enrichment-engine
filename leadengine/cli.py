@@ -143,10 +143,14 @@ def main(argv=None):
     a = p.parse_args(argv)
     configure_event_loop()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    if asyncio.iscoroutinefunction(a.fn):
-        asyncio.run(a.fn(a))
-    else:
-        a.fn(a)
+    from .backends import BackendConfigError, BackendUnavailable
+    try:
+        if asyncio.iscoroutinefunction(a.fn):
+            asyncio.run(a.fn(a))
+        else:
+            a.fn(a)
+    except (BackendConfigError, BackendUnavailable) as e:   # optional extraction backend: say what is wrong; never fall back to another engine
+        raise SystemExit(f"error: extraction backend not usable: {e}\n(unset LE_EXTRACTION_BACKEND / LE_SCRAPEGRAPH_ENABLED to use the default in-house engine)")
 
 
 if __name__ == "__main__":

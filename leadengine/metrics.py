@@ -43,6 +43,8 @@ async def collect(db, job_id: Optional[str] = None, since_run_id: int = 0) -> di
                    coalesce(sum((t.value->>'requests')::int),0) requests,
                    coalesce(sum((t.value->>'cost_usd')::float),0) cost_usd_est
                FROM enrichment_runs, jsonb_each(tiers) t {where} GROUP BY t.key""", args)).fetchall()
+        llm_rows = await (await c.execute(
+            f"SELECT cost->'llm' AS llm FROM enrichment_runs {where} AND cost ? 'llm' AND cost->'llm' <> 'null'::jsonb", args)).fetchall()
     runs = overall["runs"] or 0
     by = {t["tier"]: t for t in tiers}
     tier_out = {}
@@ -70,6 +72,33 @@ async def collect(db, job_id: Optional[str] = None, since_run_id: int = 0) -> di
         "retry_rate": round(overall["retries"] / overall["http_requests"], 4) if overall["http_requests"] else 0,
         "cost_usd_estimated": round(f("cost_usd_est"), 6),
         "tiers": tier_out,
+        "llm": llm_usage([r["llm"] for r in llm_rows]),
         "note": "USD figures are estimates from configured unit prices (LE_AI_PRICE_*, LE_COST_PER_HTTP_REQUEST_USD, "
                 "LE_BROWSER_COST_PER_SECOND_USD); infrastructure cost is not included unless configured.",
     }
+
+
+def llm_usage(per_run: list[dict]) -> Optional[dict]:
+    """Aggregate the optional extraction backend's per-run usage. None when no run used a model backend (the default).
+    Local and external usage are reported separately; local inference is NOT claimed to be free of cost."""
+    per_run = [r for r in per_run if isinstance(r, dict)]
+    if not per_run:
+        return None
+    out: dict = {"runs": len(per_run), "backend": per_run[0].get("backend"), "provider": per_run[0].get("provider"),
+                 "model": per_run[0].get("model"), "scope": per_run[0].get("scope"), "scope_note": per_run[0].get("scope_note")}
+    skipped: dict = {}
+    for r in per_run:
+        for reason, n in (r.get("pages_skipped") or {}).items():
+            skipped[reason] = skipped.get(reason, 0) + int(n)
+    rejected: dict = {}                                            # run stores {"kind:field": reason}; report counts per reason
+    for r in per_run:
+        for reason in (r.get("rejected") or {}).values():
+            rejected[str(reason)] = rejected.get(str(reason), 0) + 1
+    out["pages_skipped"], out["rejected"] = skipped, rejected
+    out["rejected_total"] = sum(rejected.values())
+    for k in ("calls", "tokens_in", "tokens_out", "failures", "timeouts", "retries", "pages_sent", "pages_from_cache"):
+        out[k] = sum(int(r.get(k) or 0) for r in per_run)
+    out["latency_ms_total"] = round(sum(float(r.get("latency_ms") or 0) for r in per_run), 1)
+    out["external_usd_estimated"] = round(sum(float(r.get("external_usd_estimated") or 0) for r in per_run), 6)
+    out["worker_blocked_attempts"] = sum(len(r.get("worker_blocked_attempts") or []) for r in per_run)
+    return out

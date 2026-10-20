@@ -47,6 +47,7 @@ sys.path.insert(0, str(ROOT))
 
 from benchmarks.sysinfo import git_commit, hardware as sys_hardware  # noqa: E402
 from leadengine import jobs, metrics  # noqa: E402
+from leadengine.backends import BackendConfigError, BackendUnavailable  # noqa: E402
 from leadengine.compat import configure_event_loop  # noqa: E402
 from leadengine.config import Settings  # noqa: E402
 from leadengine.csv_io import detect_delimiter  # noqa: E402
@@ -136,6 +137,40 @@ def load_sample(path: str) -> list[dict]:
     return out
 
 
+REMOTE_PROVIDERS = {"openai", "anthropic"}
+
+
+def sg_overrides(args, *, live: bool) -> dict:
+    """Settings for the OPTIONAL ScrapeGraphAI backend. {} for the default in-house engine (nothing changes).
+    Remote model providers are refused unless explicitly confirmed, priced and keyed; there is never a silent fallback."""
+    if getattr(args, "backend", "inhouse") != "scrapegraph":
+        return {}
+    if args.ai:
+        raise PilotError("--ai (in-house tier 5) and --backend scrapegraph are alternatives; pick one.")
+    if getattr(args, "sg_stub", False):
+        if live:
+            raise PilotError("--sg-stub is a SIMULATED model for fixture runs only; it cannot be used on a live pilot.")
+        return {}                                     # filled in by run() once the stub server is listening
+    if not args.sg_provider or not args.sg_model:
+        raise PilotError("--backend scrapegraph needs an explicit --sg-provider (ollama|openai|anthropic) and --sg-model; there is no default.")
+    base = args.sg_base_url or ""
+    remote = args.sg_provider in REMOTE_PROVIDERS or (base and urlsplit(base).hostname not in ("127.0.0.1", "localhost", "::1", None))
+    if remote:
+        if not args.confirm_external_model:
+            raise PilotError("This model endpoint is NOT on this machine: page content would be sent to a third party. Review that, then pass "
+                             "--confirm-external-model.")
+        if args.sg_price_in is None or args.sg_price_out is None:
+            raise PilotError("An external model also needs --sg-price-in and --sg-price-out (USD per million tokens) so cost can be estimated.")
+        key_env = args.sg_api_key_env or {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}.get(args.sg_provider, "")
+        if not key_env or not os.environ.get(key_env):
+            raise PilotError(f"The external model needs its API key in the environment variable {key_env or '(--sg-api-key-env)'}; it is not set.")
+    return {"extraction_backend": "scrapegraph", "scrapegraph_enabled": True, "scrapegraph_provider": args.sg_provider,
+            "scrapegraph_model": args.sg_model, "scrapegraph_base_url": base or None,
+            "scrapegraph_python": args.sg_python or os.environ.get("LE_SCRAPEGRAPH_PYTHON", ""),
+            "scrapegraph_api_key_env": args.sg_api_key_env or "",
+            "scrapegraph_price_in_per_mtok": args.sg_price_in or 0.0, "scrapegraph_price_out_per_mtok": args.sg_price_out or 0.0}
+
+
 # ------------------------------------------------------------------ guarded settings
 def live_settings(args) -> Settings:
     ua = os.environ.get("LE_USER_AGENT", "")
@@ -157,7 +192,8 @@ def live_settings(args) -> Settings:
         browser_executable=args.browser_executable or None,
         ai_provider="anthropic" if args.ai else "", ai_model=args.ai_model,
         ai_price_in_per_mtok=args.ai_price_in or 0.0, ai_price_out_per_mtok=args.ai_price_out or 0.0,
-        fetch_audit_log=True, item_max_attempts=2, job_heartbeat_seconds=5, job_lease_seconds=30)
+        fetch_audit_log=True, item_max_attempts=2, job_heartbeat_seconds=5, job_lease_seconds=30,
+        **sg_overrides(args, live=True))
 
 
 def check_db_name(url: str) -> None:
@@ -254,10 +290,36 @@ async def collect(eng: Engine, job_id: str, n_input: int, wall: float, s: Settin
                                     label(None, "UNKNOWN", "needs prices and usable>0")),
             "infrastructure": (label(round(compute_rate * wall / 3600 / max(1, attempted) * 1000, 4), "ESTIMATED", "--compute-usd-per-hour x wall time, per 1000 attempted")
                                if compute_rate else label(None, "UNKNOWN", "not provided; excluded from all cost figures"))},
+        "model_usage": model_usage_section(m.get("llm"), s, attempted, usable),
         "fetch_log_breakdown": label({(r["error_kind"] or "ok"): r["n"] for r in fl}, "MEASURED"),
         "tiers": m["tiers"],
     }
     return rep
+
+
+def model_usage_section(u: dict | None, s: Settings, attempted: int, usable: int) -> dict:
+    """Model usage of the OPTIONAL backend; separate from the in-house tier-5 `ai_cost`. Local inference is reported, never called free."""
+    if not u:
+        return {"backend": label(s.extraction_backend, "MEASURED", "no model calls were made by an extraction backend")}
+    ext = u["external_usd_estimated"]
+    out = {"backend": label(u["backend"], "MEASURED"), "provider": label(u["provider"], "MEASURED"), "model": label(u["model"], "MEASURED"),
+           "scope": label(u["scope"], "MEASURED", u["scope_note"] or ""),
+           "model_calls": label(u["calls"], "MEASURED"), "model_calls_per_company": label(round(u["calls"] / max(1, attempted), 3), "MEASURED"),
+           "tokens_in": label(u["tokens_in"], "MEASURED", "as reported by the model server" if u["scope"] == "local" else ""),
+           "tokens_out": label(u["tokens_out"], "MEASURED"),
+           "model_latency_ms_total": label(u["latency_ms_total"], "MEASURED"),
+           "model_failures": label(u["failures"], "MEASURED"), "model_timeouts": label(u["timeouts"], "MEASURED"),
+           "model_retries": label(u["retries"], "MEASURED"),
+           "unsupported_values_rejected": label(u["rejected_total"], "MEASURED", f"model answers not found on the page: dropped, never stored; by reason {u['rejected']}"),
+           "pages_skipped_by_limits": label(u["pages_skipped"], "MEASURED"),
+           "worker_blocked_network_attempts": label(u["worker_blocked_attempts"], "MEASURED", "should be 0; >0 means the library tried to reach a non-allowlisted host")}
+    if u["scope"] == "external":
+        out["external_usd_per_1000_attempted"] = label(round(ext / max(1, attempted) * 1000, 4), "ESTIMATED", "measured tokens x --sg-price-*")
+        out["external_usd_per_1000_usable"] = (label(round(ext / usable * 1000, 4), "ESTIMATED", "usable = presence_only") if usable
+                                              else label(None, "UNKNOWN", "no usable records"))
+    else:
+        out["external_usd"] = label(0.0, "MEASURED", "no per-token charge; local inference still costs hardware time and electricity (not priced here)")
+    return out
 
 
 async def token_usage(eng: Engine, job_id: str) -> dict:
@@ -503,6 +565,7 @@ async def run(args) -> None:
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     fixtures = args.fixtures
     fx = None
+    stub = None
     truth_fn = None
     if fixtures:
         from leadengine.fixture_sites import DEFAULT_MIX, make_site, pick_kind
@@ -521,7 +584,16 @@ async def run(args) -> None:
         s = Settings(database_url=args.database_url, user_agent="LeadEnrichmentPilotFixture/1.0", host_overrides="*.fixture.test=127.0.0.1",
                      allowed_ports="80,443", global_concurrency=args.concurrency, per_domain_min_delay=args.min_delay, per_domain_concurrency=1,
                      max_pages_per_company=min(args.max_pages, 3), http_max_retries=1, browser_enabled=bool(args.allow_browser),
-                     browser_executable=args.browser_executable or None, ai_provider="", job_heartbeat_seconds=5, job_lease_seconds=30)
+                     browser_executable=args.browser_executable or None, ai_provider="", job_heartbeat_seconds=5, job_lease_seconds=30,
+                     **sg_overrides(args, live=False))
+        if getattr(args, "backend", "inhouse") == "scrapegraph" and getattr(args, "sg_stub", False):
+            from benchmarks.stub_llm import StubLLMServer
+            stub = StubLLMServer(mode="heuristic"); stub.__enter__()
+            s = s.model_copy(update={"extraction_backend": "scrapegraph", "scrapegraph_enabled": True, "scrapegraph_provider": "ollama",
+                                     "scrapegraph_model": "stubmodel", "scrapegraph_base_url": stub.base_url,
+                                     "scrapegraph_python": getattr(args, "sg_python", None) or os.environ.get("LE_SCRAPEGRAPH_PYTHON", "")})
+            print("NOTE: --sg-stub is a SIMULATED rule-based responder, NOT a language model. Its results say nothing about model quality.",
+                  file=sys.stderr)
         attr = {"company_name": "name", "description": "description", "email": "email", "phone": "phone", "address": "address",
                 "linkedin_url": "linkedin"}
 
@@ -550,14 +622,22 @@ async def run(args) -> None:
         mode = "LIVE pilot (real websites)"
     check_db_name(args.database_url)
     eng = Engine(s)
-    await eng.start()
+    try:
+        await eng.start()
+    except (BackendUnavailable, BackendConfigError) as e:         # no site has been contacted yet: the model/library check runs first
+        if stub:
+            stub.__exit__(None, None, None)
+        if fx:
+            fx.terminate()
+        raise PilotError(f"extraction backend not usable (no website was contacted): {e}")
     try:
         if args.reset:
             async with eng.db.connection() as c:
                 await c.execute("TRUNCATE jobs, companies, http_cache, extraction_cache, enrichment_runs, fetch_log RESTART IDENTITY CASCADE")
         cos = [{"website": r["domain"], "name": r["name"]} for r in rows]
+        sg = s.extraction_backend == "scrapegraph"
         budget = {"pages": len(rows) * (s.max_pages_per_company + 1), "seconds": args.max_seconds, "browser_ops": len(rows) if args.allow_browser else 0,
-                  "ai_calls": len(rows) if args.ai else 0}
+                  "ai_calls": len(rows) * s.scrapegraph_max_calls_per_company if sg else (len(rows) if args.ai else 0)}
         info = await jobs.create_job_from_companies(eng.db, s, cos, requested=["company_name", "description", "email", "phone", "address", "linkedin_url"],
                                                     budget=budget)
         print(f"job {info['job_id']}: {len(rows)} companies, {s.global_concurrency} at a time, >= {s.per_domain_min_delay}s per host", file=sys.stderr)
@@ -583,7 +663,9 @@ async def run(args) -> None:
                "sample": sample_path, "sample_sha256": sample_sha, "sample_size": len(rows), "job_id": info["job_id"],
                "settings": {k: getattr(s, k) for k in ("global_concurrency", "per_domain_concurrency", "per_domain_min_delay", "max_pages_per_company",
                                                        "http_max_retries", "total_timeout", "max_response_bytes", "max_redirects", "respect_robots",
-                                                       "browser_enabled", "ai_provider", "ai_model", "user_agent")},
+                                                       "browser_enabled", "ai_provider", "ai_model", "user_agent",
+                                                       "extraction_backend", "scrapegraph_provider", "scrapegraph_model",
+                                                       "scrapegraph_max_calls_per_company", "scrapegraph_max_pages_per_company")},
                "results": res, "artifacts": arts, "limitations": [
                    "Coverage is presence, not correctness; accuracy comes only from the human audit sheet.",
                    f"Sample of {len(rows)} hand-picked sites: not statistically representative of any larger population.",
@@ -596,6 +678,8 @@ async def run(args) -> None:
         print(json.dumps({"report": str(out_dir / f"pilot-{stamp}.md"), **arts}, indent=2))
     finally:
         await eng.stop()
+        if stub:
+            stub.__exit__(None, None, None)
         if fx:
             fx.terminate()
 
@@ -619,6 +703,15 @@ def main() -> None:
     r.add_argument("--allow-browser", action="store_true"); r.add_argument("--browser-executable", default="")
     r.add_argument("--ai", action="store_true", help="enable the LLM tier (needs ANTHROPIC_API_KEY)")
     r.add_argument("--ai-model", default="claude-haiku-5-5"); r.add_argument("--ai-price-in", type=float); r.add_argument("--ai-price-out", type=float)
+    r.add_argument("--backend", choices=["inhouse", "scrapegraph"], default="inhouse",
+                   help="extraction backend (default: the in-house engine; scrapegraph = OPTIONAL local-library backend, see docs/SCRAPEGRAPH_INTEGRATION.md)")
+    r.add_argument("--sg-provider", choices=["ollama", "openai", "anthropic"]); r.add_argument("--sg-model")
+    r.add_argument("--sg-base-url", help="model server URL, e.g. http://127.0.0.1:11434 for a local Ollama")
+    r.add_argument("--sg-python", help="path to a Python>=3.12 interpreter that has scrapegraphai installed (or env LE_SCRAPEGRAPH_PYTHON)")
+    r.add_argument("--sg-api-key-env", help="NAME of the environment variable holding a remote provider's key (the key itself is never a CLI argument)")
+    r.add_argument("--sg-price-in", type=float); r.add_argument("--sg-price-out", type=float)
+    r.add_argument("--confirm-external-model", action="store_true", help="REQUIRED for any model endpoint that is not on this machine")
+    r.add_argument("--sg-stub", action="store_true", help="fixtures only: SIMULATED rule-based responder instead of a model (not an LLM)")
     r.add_argument("--compute-usd-per-hour", type=float, default=0.0)
     r.add_argument("--audit-per-field", type=int, default=30); r.add_argument("--out-dir", default=str(ROOT / "benchmarks" / "results"))
     sc = sub.add_parser("score", help="compute metrics from a human-completed review (or fixture audit) sheet")

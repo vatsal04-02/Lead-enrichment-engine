@@ -83,6 +83,26 @@ Tests (use their own database `enrich_test`, which they truncate): `python -m py
 
 Without AI/browser configured the engine runs Tiers 1–3 and reports fields they cannot recover as `not_found`.
 
+## Optional: ScrapeGraphAI extraction backend (off by default)
+
+An opt-in alternative to the in-house tiers, built on the open-source `scrapegraphai` library with a local (Ollama) or an
+explicitly configured remote model. **The default engine is unchanged; nothing here runs unless you enable it.** The library never
+fetches anything: our guarded fetcher (SSRF guard, robots.txt, no auth/CAPTCHA bypass, page budgets, `fetch_log`) fetches the page
+and passes page *content* to an isolated worker process whose network is limited to the model host. Model answers are stored only if
+the page itself supports them (otherwise `extraction_state = invalid`), with real source URL, method `scrapegraph_llm`, timestamps and
+`unverified` status. Calls, pages, tokens, timeouts and retries are capped per company and per job; usage is reported (local
+inference is reported as tokens/latency — it is not claimed to be free).
+
+```bash
+LE_EXTRACTION_BACKEND=scrapegraph LE_SCRAPEGRAPH_ENABLED=true LE_SCRAPEGRAPH_PROVIDER=ollama LE_SCRAPEGRAPH_MODEL=llama3.2 \
+LE_SCRAPEGRAPH_PYTHON=/path/to/py312/bin/python  python -m leadengine enrich acme.com
+python -m benchmarks.compare_backends --database-url postgresql://u@h:5432/enrich_pilot --sites 60 --model stub-heuristic --sg-python /path/to/py312/bin/python
+```
+
+Rollback = unset `LE_EXTRACTION_BACKEND`. Install (Windows PowerShell and Linux), configuration, limits, security limitations, benchmark
+interpretation and troubleshooting: **[docs/SCRAPEGRAPH_INTEGRATION.md](docs/SCRAPEGRAPH_INTEGRATION.md)**. Benchmarks against fixtures are
+synthetic and say nothing about live-site accuracy.
+
 ## REST API (`/v1`, optional bearer token `LE_API_TOKEN`)
 
 | route | purpose |
@@ -207,6 +227,9 @@ Migrations must be additive; destructive changes (drops/rewrites) are never appl
   clients can lower but never raise job budgets; secrets are `SecretStr` (masked in `repr`/dumps) and credential-looking
   substrings are redacted from stored/logged error text.
 * Secrets: configuration only via environment; API keys are never logged or returned; errors stored/returned are sanitised.
+* Optional ScrapeGraphAI backend: the library gets no URL and no network (worker allow-list = the model host only; start-up self-check
+  proves 7 guards or refuses to start); telemetry off; model output is grounded against the page before it is stored. Details and limits:
+  `docs/SCRAPEGRAPH_INTEGRATION.md`.
 * The `LE_HOST_OVERRIDES` setting exists **only** for tests/benchmarks to point fixture hostnames at localhost.
 
 ## Measured results (local synthetic fixtures only — not the real web)

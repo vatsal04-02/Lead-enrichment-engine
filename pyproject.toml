@@ -20,6 +20,9 @@ dependencies = [
 [project.optional-dependencies]
 browser = ["playwright>=1.44"]
 ai = ["anthropic>=1.0"]
+# OPTIONAL alternative extraction backend (off by default). Needs Python >= 3.12; it normally lives in its OWN virtualenv
+# (see docs/SCRAPEGRAPH_INTEGRATION.md) and is reached through LE_SCRAPEGRAPH_PYTHON. The range is pinned to the audited 2.3.x line.
+scrapegraph = ["scrapegraphai>=2.3.1,<2.4; python_version >= '3.12'"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]
 
 [project.scripts]

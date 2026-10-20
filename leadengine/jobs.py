@@ -33,22 +33,26 @@ class JobError(ValueError):
     pass
 
 
-_BUDGET_KEYS = ("pages", "ai_calls", "browser_ops", "seconds", "est_cost_usd")
+_BUDGET_KEYS = ("pages", "ai_calls", "browser_ops", "ai_tokens", "seconds", "est_cost_usd")
 
 
 def default_budget(s: Settings, overrides: Optional[dict] = None) -> dict:
     """Server limits are ceilings: a client may lower a budget but never raise it or switch it off.
     (Only when the operator configured 0 = unlimited may a client pick its own limit.)"""
-    server = {"pages": s.budget_pages, "ai_calls": s.budget_ai_calls if s.ai_provider else 0,
+    sg_on = s.extraction_backend == "scrapegraph" and s.scrapegraph_enabled
+    llm_on = bool(s.ai_provider) or sg_on
+    server = {"pages": s.budget_pages, "ai_calls": s.budget_ai_calls if llm_on else 0,
               "browser_ops": s.budget_browser_ops if s.browser_enabled else 0,
               "seconds": s.budget_seconds, "est_cost_usd": s.budget_est_cost_usd}
+    if sg_on:                                    # the token ceiling exists only for the optional backend: default job budgets are unchanged
+        server["ai_tokens"] = s.budget_ai_tokens
     out = dict(server)
     for k, v in (overrides or {}).items():
         if k not in _BUDGET_KEYS:
             raise JobError(f"unknown budget key {k!r}; valid: {list(_BUDGET_KEYS)}")
         if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0:
             raise JobError(f"budget {k} must be a non-negative number")
-        limit = server[k]
+        limit = server.get(k, 0)
         if limit == 0:
             out[k] = v                  # operator allows unlimited: client may choose (0 stays unlimited)
         elif v == 0:

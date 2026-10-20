@@ -5,6 +5,7 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Optional
 
 from .ai import AIExtractor, LLMProvider, make_provider
+from .backends import make_llm_backend
 from .browser import BrowserRenderer
 from .config import Settings, get_settings
 from .audit import FetchAudit
@@ -42,10 +43,20 @@ class Engine:
         ai = AIExtractor(s, provider) if provider else None
         self.browser = BrowserRenderer(s, self.fetcher) if s.browser_enabled else None
         self._pool = ProcessPoolExecutor(s.parse_workers) if s.parse_workers > 0 else None
-        self.enricher = Enricher(s, self.db, self.fetcher, ai, self.browser, self._pool)
+        self.llm_backend = None
+        try:
+            self.llm_backend = make_llm_backend(s)        # None for the default engine: nothing is imported or started
+            if self.llm_backend is not None:
+                await self.llm_backend.preflight()        # fail clearly now, not company by company
+        except Exception:
+            await self.stop()
+            raise
+        self.enricher = Enricher(s, self.db, self.fetcher, ai, self.browser, self._pool, llm_backend=self.llm_backend)
         return self
 
     async def stop(self) -> None:
+        if getattr(self, "llm_backend", None) is not None:
+            await self.llm_backend.aclose()
         if self.browser:
             await self.browser.aclose()
         if self.fetcher:

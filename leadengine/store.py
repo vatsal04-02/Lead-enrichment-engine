@@ -85,7 +85,8 @@ async def company_view(conn, domain: str, requested: Optional[list[str]] = None,
         "last_enriched_at": comp["last_enriched_at"].isoformat() if comp["last_enriched_at"] else None,
         "completeness": score["completeness"], "quality": score["quality"],
         "verified_share": score["verified_share"],
-        "fields": {f: {**score["fields"][f], **(field_json(rows[f]) if f in rows else {"value": None})}
+        "fields": {f: {**score["fields"][f], **(field_json(rows[f]) if f in rows else {"value": None}),
+                       "extraction_state": extraction_state(rows.get(f))}
                    for f in req},
     }
     if "website" in rows:
@@ -96,6 +97,16 @@ async def company_view(conn, domain: str, requested: Optional[list[str]] = None,
             "FROM company_field_history WHERE company_id=%s ORDER BY changed_at DESC LIMIT 200", (comp["id"],))
         view["history"] = [{**r, "changed_at": r["changed_at"].isoformat()} for r in await cur.fetchall()]
     return view
+
+
+def extraction_state(row) -> str:
+    """extracted | conflict | missing | invalid | skipped_budget (the last three only come from model-backed runs)."""
+    if row is None:
+        return "missing"
+    st = (row["checks"] or {}).get("extraction_state")
+    if st:
+        return st
+    return "extracted" if row["status"] == "found" and row["value"] else "missing"
 
 
 async def existing_domains(conn, domains: list[str]) -> set[str]:
