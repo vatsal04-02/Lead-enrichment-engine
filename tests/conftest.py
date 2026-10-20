@@ -8,7 +8,7 @@ from leadengine.config import Settings
 from leadengine.engine import Engine
 from leadengine.fixture_sites import FixtureServer
 
-DB_URL = os.environ.get("LE_TEST_DATABASE_URL", "postgresql://enrich@127.0.0.1:55432/enrich")
+DB_URL = os.environ.get("LE_TEST_DATABASE_URL", "postgresql://enrich@127.0.0.1:55432/enrich_test")
 
 
 def make_settings(**kw) -> Settings:

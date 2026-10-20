@@ -165,6 +165,11 @@ def render(s: Site, path: str, state: FixtureState) -> tuple[int, str, dict, str
     if k == "ratelimited" and path == "/" and not seen:
         return 429, h, {"Retry-After": "1"}, "slow down"
 
+    if path == "/nostore":
+        return 200, h, {"Cache-Control": "no-store"}, _page("ns", "", "<p>no-store</p>")
+    if path == "/maxage":
+        return 200, h, {"Cache-Control": "max-age=3600"}, _page("ma", "", "<p>max-age</p>")
+
     home_meta = f'<meta name="description" content="{s.description}">'
     if path == "/":
         if k in ("jsonld", "slow", "flaky", "ratelimited", "etag"):

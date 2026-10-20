@@ -300,3 +300,111 @@ async def test_browser_subrequests_cannot_reach_private_hosts(fixtures):
         assert (status, body) == (0, b"")
     finally:
         await f.aclose()
+
+
+# ---------------------------------------------------------------- politeness, limits, cache rules
+async def test_per_domain_min_delay_and_concurrency_are_enforced(fixtures):
+    import asyncio, time
+    eng = await fresh_engine(fixtures, per_domain_min_delay=0.3, per_domain_concurrency=1, respect_robots=False)
+    try:
+        s = site_of(fixtures, "plain")
+        fixtures.state.reset()
+        t0 = time.monotonic()
+        await asyncio.gather(*[eng.fetcher.fetch(f"{url_of(fixtures, s)}?n={i}") for i in range(4)])
+        assert time.monotonic() - t0 >= 0.3 * 3 - 0.05            # 4 requests => 3 enforced gaps
+        stamps = [t for t, h, p in fixtures.state.hit_log if h == s.host]
+        gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+        assert min(gaps) >= 0.25
+    finally:
+        await eng.stop()
+
+
+async def test_retry_after_is_honoured_and_oversized_values_stop_retrying(fixtures):
+    import time
+    eng = await fresh_engine(fixtures, respect_robots=False, backoff_base=0.01, backoff_max=0.02)
+    try:
+        s = site_of(fixtures, "ratelimited")                       # first response: 429 + Retry-After: 1
+        t0 = time.monotonic()
+        r = await eng.fetcher.fetch(url_of(fixtures, s))
+        assert r.ok and r.retries == 1 and time.monotonic() - t0 >= 0.95     # waited what the server asked
+    finally:
+        await eng.stop()
+    eng = await fresh_engine(fixtures, respect_robots=False, max_retry_after=0.5)
+    try:
+        s = site_of(fixtures, "ratelimited", 1)
+        r = await eng.fetcher.fetch(url_of(fixtures, s))
+        assert not r.ok and r.error_kind == "rate_limited" and r.transient
+    finally:
+        await eng.stop()
+
+
+async def test_permanent_http_errors_are_not_retried(fixtures):
+    eng = await fresh_engine(fixtures, respect_robots=False, http_max_retries=3, backoff_base=0.01)
+    try:
+        s = site_of(fixtures, "not_found")
+        fixtures.state.reset()
+        r = await eng.fetcher.fetch(url_of(fixtures, s))
+        assert r.error_kind == "http" and r.status == 404 and r.retries == 0 and not r.transient
+        assert fixtures.state.count(s.host, "/") == 1
+    finally:
+        await eng.stop()
+
+
+async def test_cache_control_rules(engine, fixtures):
+    s = site_of(fixtures, "plain")
+    base = f"http://{s.host}:{fixtures.port}"
+    await engine.fetcher.fetch(base + "/nostore"); await engine.fetcher.fetch(base + "/nostore")
+    assert fixtures.state.count(s.host, "/nostore") == 2                      # never cached
+    await engine.fetcher.fetch(base + "/maxage"); r = await engine.fetcher.fetch(base + "/maxage")
+    assert fixtures.state.count(s.host, "/maxage") == 1 and r.from_cache      # fresh for max-age
+    async with engine.db.connection() as c:
+        urls = {x["url"] for x in await (await c.execute("SELECT url FROM http_cache")).fetchall()}
+    assert base + "/nostore" not in urls and base + "/maxage" in urls
+
+
+async def test_unchanged_pages_are_not_reparsed(engine, fixtures):
+    s = site_of(fixtures, "plain")
+    await engine.enricher.enrich(url_of(fixtures, s), requested=["email", "phone"])
+    async with engine.db.connection() as c:
+        await c.execute("UPDATE company_fields SET refresh_after = now() - interval '1 day'")
+        await c.execute("UPDATE http_cache SET expires_at = now() - interval '1 day', etag=NULL")
+        n_before = (await (await c.execute("SELECT count(*) n FROM extraction_cache")).fetchone())["n"]
+    r = await engine.enricher.enrich(url_of(fixtures, s), requested=["email", "phone"])
+    async with engine.db.connection() as c:
+        n_after = (await (await c.execute("SELECT count(*) n FROM extraction_cache")).fetchone())["n"]
+    assert n_before == n_after and n_after >= 1               # same content hash => reused parse result
+
+
+async def test_worker_concurrency_and_queue_are_bounded(fixtures):
+    import asyncio
+    from leadengine import jobs
+    from leadengine.worker import Worker
+    eng = await fresh_engine(fixtures, global_concurrency=3, queue_size=6, claim_batch_size=4)
+    try:
+        peak = {"now": 0, "max": 0, "tasks": 0}
+        orig = eng.enricher.enrich
+
+        async def spy(*a, **k):
+            peak["now"] += 1
+            peak["max"] = max(peak["max"], peak["now"])
+            try:
+                await asyncio.sleep(0.02)
+                return await orig(*a, **k)
+            finally:
+                peak["now"] -= 1
+        eng.enricher.enrich = spy
+        cos = [{"website": f"http://c{i}.fixture.test:{fixtures.port}/"} for i in range(40)]
+        info = await jobs.create_job_from_companies(eng.db, eng.settings, cos, requested=["email"])
+        w = Worker(eng)
+        before = len(asyncio.all_tasks())
+        t = asyncio.create_task(w.run(once=True))
+        samples = []
+        while not t.done():
+            samples.append(len(asyncio.all_tasks()) - before)
+            await asyncio.sleep(0.01)
+        assert peak["max"] <= 3
+        assert max(samples) < 30                                        # tasks ~ fixed pool, not one per row
+        async with eng.db.connection() as c:
+            assert (await (await c.execute("SELECT count(*) n FROM job_items WHERE status='succeeded' OR status='failed'")).fetchone())["n"] == 40
+    finally:
+        await eng.stop()

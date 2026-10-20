@@ -256,14 +256,14 @@ class Fetcher:
                 return FetchResult(url=url, error_kind=kind, error=why,
                                    elapsed_ms=(time.monotonic() - t0) * 1000)
 
-        if budget is not None and not budget.allows("pages"):
+        if budget is not None and use_robots and not budget.allows("pages"):
             return FetchResult(url=url, error_kind="budget", error="page budget exhausted")
-        if run is not None:
+        if run is not None and use_robots:        # robots.txt itself does not count as a page
             host = cu.host
             if run.pages_by_host.get(host, 0) >= self.s.max_pages_per_domain:
                 return FetchResult(url=url, error_kind="budget", error="per-domain page limit reached")
             run.pages_by_host[host] = run.pages_by_host.get(host, 0) + 1
-        if budget is not None:
+        if budget is not None and use_robots:
             budget.charge("pages")
 
         res = await self._network_fetch(url, cached, run, ttl_override)
@@ -316,6 +316,8 @@ class Fetcher:
                 if not ok:
                     return FetchResult(url=url, final_url=current, error_kind=kind, error=why)
             try:
+                if self.s.egress_proxy:      # proxy connects, so we can only pre-check what the name resolves to
+                    await self._precheck_via_proxy(cu)
                 async with self.global_sem, self.limiter.slot(cu.host):
                     if run is not None:
                         run.http_requests += 1
@@ -339,6 +341,14 @@ class Fetcher:
                 return FetchResult(url=url, final_url=current, error_kind="blocked",
                                    error=sanitize_for_log(str(e)))
         return FetchResult(url=url, error_kind="network", error="too many redirects")
+
+    async def _precheck_via_proxy(self, cu) -> None:
+        try:
+            await self.resolver.resolve_public(cu.host, cu.port)
+        except BlockedDestination:
+            raise
+        except Exception:
+            pass        # local DNS may be unavailable when a proxy resolves names; only definite hits block
 
     async def _handle_response(self, url, current, resp, cached, run, ttl_override, host) -> FetchResult:
         status = resp.status_code
@@ -389,7 +399,7 @@ class Fetcher:
         digest = hashlib.sha256(raw).hexdigest()
         res = FetchResult(url=url, final_url=current, status=200, text=decode_body(raw, resp.headers.get("content-type", "")),
                           content_type=ctype, content_hash=digest, bytes=total)
-        if not (cc.get("no-store") or cc.get("private")):
+        if "no-store" not in cc and "private" not in cc:
             await self._cache_put(url, res, raw, resp.headers.get("etag"), resp.headers.get("last-modified"),
                                   self._expiry(cc, resp.headers, ttl_override))
         return res
