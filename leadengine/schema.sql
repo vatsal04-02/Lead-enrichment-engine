@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     claimed_by      TEXT,
     lease_expires_at TIMESTAMPTZ,
     cancel_requested BOOLEAN NOT NULL DEFAULT FALSE,
+    ready           BOOLEAN NOT NULL DEFAULT FALSE,   -- false while rows are still being ingested
+    idempotency_key TEXT UNIQUE,
     error_summary   JSONB NOT NULL DEFAULT '{}',
     stats           JSONB NOT NULL DEFAULT '{}'
 );
@@ -106,6 +108,7 @@ CREATE TABLE IF NOT EXISTS job_items (
     domain          TEXT,
     company_id      BIGINT REFERENCES companies(id),
     duplicate_of    INT,
+    known_company   BOOLEAN NOT NULL DEFAULT FALSE,   -- domain already existed in PostgreSQL at ingest time
     attempts        INT NOT NULL DEFAULT 0,
     not_before      TIMESTAMPTZ,
     claimed_by      TEXT,
@@ -143,3 +146,9 @@ CREATE TABLE IF NOT EXISTS enrichment_runs (
     cost            JSONB NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS enrichment_runs_job_idx ON enrichment_runs (job_id);
+
+-- Forward-compatible column additions (databases created by earlier versions of this file).
+ALTER TABLE company_fields ADD COLUMN IF NOT EXISTS tier TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ready BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
+ALTER TABLE job_items ADD COLUMN IF NOT EXISTS known_company BOOLEAN NOT NULL DEFAULT FALSE;

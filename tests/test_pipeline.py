@@ -6,7 +6,7 @@ from leadengine.budget import Budget
 from leadengine.ai import AIExtractor, LLMResponse
 from leadengine.fields import DEFAULT_REQUESTED
 from leadengine.pipeline import Enricher
-from tests.conftest import site_of, url_of, make_settings
+from tests.conftest import fresh_engine, site_of, url_of, make_settings
 
 REQ = list(DEFAULT_REQUESTED)
 
@@ -122,18 +122,14 @@ async def test_retry_after_and_transient_errors_recover(engine, fixtures):
 
 
 async def test_timeout_is_transient_failure_not_crash(fixtures):
-    from tests.conftest import make_settings
-    from leadengine.engine import Engine
-    eng = Engine(make_settings(read_timeout=0.3, total_timeout=0.5, http_max_retries=0))
-    await eng.start()
+    eng = await fresh_engine(fixtures, read_timeout=0.3, total_timeout=0.5, http_max_retries=0)
     try:
         s = site_of(fixtures, "slow")
         r = await eng.enricher.enrich(url_of(fixtures, s), requested=REQ)
         assert r.outcome == "failed" and r.transient and r.error_kind == "network"   # robots.txt timed out
     finally:
         await eng.stop()
-    eng = Engine(make_settings(read_timeout=0.3, total_timeout=0.5, http_max_retries=0, respect_robots=False))
-    await eng.start()
+    eng = await fresh_engine(fixtures, read_timeout=0.3, total_timeout=0.5, http_max_retries=0, respect_robots=False)
     try:
         s = site_of(fixtures, "slow", 1)
         r = await eng.enricher.enrich(url_of(fixtures, s), requested=REQ)
@@ -198,12 +194,7 @@ class FakeLLM:
 
 
 async def _ai_engine(fixtures, llm):
-    from leadengine.engine import Engine
-    eng = Engine(make_settings(), provider=llm)
-    await eng.start()
-    async with eng.db.connection() as c:
-        await c.execute("TRUNCATE companies, http_cache, extraction_cache, enrichment_runs RESTART IDENTITY CASCADE")
-    return eng
+    return await fresh_engine(fixtures, provider=llm)
 
 
 async def test_ai_tier_accepts_only_grounded_values(fixtures):

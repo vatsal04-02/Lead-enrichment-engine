@@ -81,6 +81,7 @@ class Settings(BaseSettings):
     job_lease_seconds: int = 60
     job_heartbeat_seconds: int = 15
     item_max_attempts: int = 3
+    item_retry_base_seconds: float = 2.0   # backoff for transient item failures (exp. + jitter, capped 300s)
     claim_batch_size: int = 16
     shutdown_grace_seconds: float = 20.0
     ingest_batch_size: int = 1000

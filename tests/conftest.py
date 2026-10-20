@@ -26,14 +26,19 @@ def fixtures():
         yield fx
 
 
-@pytest_asyncio.fixture
-async def engine(fixtures):
-    """Fresh data per test: truncates all tables (tests share one local test database)."""
+async def fresh_engine(fixtures, provider=None, **settings) -> Engine:
+    """Engine on an emptied database (tests share one local test database)."""
     fixtures.state.reset()
-    eng = Engine(make_settings())
+    eng = Engine(make_settings(**settings), provider=provider)
     await eng.start()
     async with eng.db.connection() as c:
         await c.execute("TRUNCATE jobs, companies, http_cache, extraction_cache, enrichment_runs RESTART IDENTITY CASCADE")
+    return eng
+
+
+@pytest_asyncio.fixture
+async def engine(fixtures):
+    eng = await fresh_engine(fixtures)
     yield eng
     await eng.stop()
 
