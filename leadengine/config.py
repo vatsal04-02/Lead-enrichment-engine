@@ -8,7 +8,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Optional
 
-from pydantic import Field
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,27 +16,27 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LE_", env_file=".env", extra="ignore")
 
     # --- storage ---
-    database_url: str = "postgresql://enrich@127.0.0.1:55432/enrich"
-    db_pool_min: int = 1
-    db_pool_max: int = 10
+    database_url: SecretStr = SecretStr("postgresql://enrich@127.0.0.1:55432/enrich")
+    db_pool_min: int = Field(1, ge=1)
+    db_pool_max: int = Field(10, ge=1)
 
     # --- concurrency / backpressure ---
-    global_concurrency: int = 8          # companies enriched at once per worker process
-    queue_size: int = 32                 # bounded hand-off queue between claimer and workers
-    http_max_connections: int = 50
-    http_max_keepalive: int = 20
-    per_domain_concurrency: int = 2
-    per_domain_min_delay: float = 0.5    # seconds between request starts to one host
+    global_concurrency: int = Field(8, ge=1)          # companies enriched at once per worker process
+    queue_size: int = Field(32, ge=1)                 # bounded hand-off queue between claimer and workers
+    http_max_connections: int = Field(50, ge=1)
+    http_max_keepalive: int = Field(20, ge=0)
+    per_domain_concurrency: int = Field(2, ge=1)
+    per_domain_min_delay: float = Field(0.5, ge=0)    # seconds between request starts to one host
     max_tracked_domains: int = 20000     # idle domain-limiter states beyond this are evicted
 
     # --- HTTP ---
     user_agent: str = "LeadEnrichmentBot/0.1 (+https://example.invalid/bot; set LE_USER_AGENT)"
-    connect_timeout: float = 5.0
-    read_timeout: float = 10.0
-    total_timeout: float = 20.0
-    max_response_bytes: int = 2_000_000
-    max_redirects: int = 5
-    http_max_retries: int = 2
+    connect_timeout: float = Field(5.0, gt=0)
+    read_timeout: float = Field(10.0, gt=0)
+    total_timeout: float = Field(20.0, gt=0)   # hard deadline per request
+    max_response_bytes: int = Field(2_000_000, ge=1024)
+    max_redirects: int = Field(5, ge=0, le=20)
+    http_max_retries: int = Field(2, ge=0, le=10)
     backoff_base: float = 0.5
     backoff_max: float = 8.0
     max_retry_after: float = 30.0        # a longer Retry-After is not waited out; the fetch fails
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     max_crawl_delay: float = 30.0        # robots.txt Crawl-delay above this => the site is skipped, not hammered or waited out
     http_cache_default_ttl: int = 86400  # used when the origin sends no freshness info
     http_cache_max_body_bytes: int = 1_000_000
-    egress_proxy: Optional[str] = None   # explicit proxy; weakens DNS-rebinding pinning (see README)
+    egress_proxy: Optional[SecretStr] = None   # explicit proxy; weakens DNS-rebinding pinning (see README)
 
     # --- SSRF guard ---
     allowed_ports: str = "80,443,8080,8443"
@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     host_overrides: str = ""
 
     # --- extraction limits ---
-    max_pages_per_company: int = 4       # homepage + targeted pages
-    max_pages_per_domain: int = 6        # hard cap per host within one company run
+    max_pages_per_company: int = Field(4, ge=1)       # homepage + targeted pages
+    max_pages_per_domain: int = Field(6, ge=1)        # hard cap per host within one company run
     browser_enabled: bool = True
     browser_concurrency: int = 1
     browser_timeout: float = 20.0
@@ -77,14 +77,14 @@ class Settings(BaseSettings):
     min_completeness_to_skip: float = 0.0  # 0 => skip only when every requested field is fresh/decided
 
     # --- jobs ---
-    max_concurrent_jobs: int = 2
-    max_companies_per_job: int = 100000
+    max_concurrent_jobs: int = Field(2, ge=1)
+    max_companies_per_job: int = Field(100000, ge=1)
     max_csv_bytes: int = 200_000_000
-    job_lease_seconds: int = 60
-    job_heartbeat_seconds: int = 15
-    item_max_attempts: int = 3
+    job_lease_seconds: int = Field(60, ge=2)
+    job_heartbeat_seconds: float = Field(15, gt=0)
+    item_max_attempts: int = Field(3, ge=1)
     item_retry_base_seconds: float = 2.0   # backoff for transient item failures (exp. + jitter, capped 300s)
-    claim_batch_size: int = 16
+    claim_batch_size: int = Field(16, ge=1)
     shutdown_grace_seconds: float = 20.0
     ingest_batch_size: int = 1000
 
@@ -101,7 +101,16 @@ class Settings(BaseSettings):
     compute_usd_per_hour: float = 0.0
 
     # --- API ---
-    api_token: Optional[str] = None      # if set, required as "Authorization: Bearer <token>"
+    api_token: Optional[SecretStr] = None      # if set, required as "Authorization: Bearer <token>"
+
+    @model_validator(mode="after")
+    def _check(self) -> "Settings":
+        if self.job_heartbeat_seconds * 2 > self.job_lease_seconds:
+            raise ValueError("LE_JOB_HEARTBEAT_SECONDS must be at most half of LE_JOB_LEASE_SECONDS "
+                             "(a missed heartbeat would let another worker steal live work)")
+        if self.http_max_keepalive > self.http_max_connections:
+            self.http_max_keepalive = self.http_max_connections
+        return self
 
     def port_set(self) -> set[int]:
         return {int(p) for p in self.allowed_ports.split(",") if p.strip()}

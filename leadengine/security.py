@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import re
 import socket
 import time
 from dataclasses import dataclass
@@ -188,7 +189,7 @@ def build_http_client(settings: Settings) -> tuple[httpx.AsyncClient, Resolver]:
     limits = httpx.Limits(max_connections=settings.http_max_connections,
                           max_keepalive_connections=settings.http_max_keepalive)
     if settings.egress_proxy:
-        client = httpx.AsyncClient(proxy=settings.egress_proxy, timeout=timeout, headers=headers,
+        client = httpx.AsyncClient(proxy=settings.egress_proxy.get_secret_value(), timeout=timeout, headers=headers,
                                    limits=limits, follow_redirects=False, trust_env=False)
     else:
         client = httpx.AsyncClient(transport=GuardedTransport(settings, resolver), timeout=timeout,
@@ -196,6 +197,18 @@ def build_http_client(settings: Settings) -> tuple[httpx.AsyncClient, Resolver]:
     return client, resolver
 
 
+_SECRET_PATTERNS = [
+    (re.compile(r"(?i)(://)[^/\s:@]+:[^/\s@]+@"), r"\1***@"),                       # user:pass@host
+    (re.compile(r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=\-]+"), r"\1 ***"),          # Authorization headers
+    (re.compile(r"\bsk-[A-Za-z0-9_\-]{6,}"), "sk-***"),                               # API keys
+    (re.compile(r"(?i)\b(password|passwd|token|secret|api[_-]?key)=\S+"), r"\1=***"),
+]
+
+
 def sanitize_for_log(text: str, limit: int = 300) -> str:
-    """Strip control characters from untrusted strings before logging/storing errors."""
-    return "".join(c if c.isprintable() else " " for c in text)[:limit]
+    """Strip control characters and credential-looking substrings from untrusted/derived strings
+    before they are logged, stored or returned by the API."""
+    text = "".join(c if c.isprintable() else " " for c in text)
+    for pat, rep in _SECRET_PATTERNS:
+        text = pat.sub(rep, text)
+    return text[:limit]

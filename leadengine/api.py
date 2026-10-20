@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 import tempfile
@@ -62,8 +63,10 @@ def create_app(settings: Optional[Settings] = None, engine: Optional[Engine] = N
     app = FastAPI(title="Lead Enrichment Engine", version="0.1.0", lifespan=lifespan)
 
     def auth(authorization: Optional[str] = Header(default=None)):
-        if settings.api_token and authorization != f"Bearer {settings.api_token}":
-            raise HTTPException(401, "missing or invalid bearer token")
+        if settings.api_token is not None:
+            expected = f"Bearer {settings.api_token.get_secret_value()}".encode()
+            if not hmac.compare_digest((authorization or "").encode(), expected):
+                raise HTTPException(401, "missing or invalid bearer token")
 
     eng_ = lambda r: r.app.state.engine
 

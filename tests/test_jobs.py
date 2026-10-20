@@ -295,3 +295,55 @@ async def test_shutdown_grace_expiry_cancels_and_requeues(fixtures):
         assert (await jobs.job_status(eng.db, info["job_id"]))["counts"]["succeeded"] == 4
     finally:
         await eng.stop()
+
+
+# ---------------------------------------------------------------- Stage-4 reliability regressions
+async def test_heartbeat_survives_transient_db_errors(fixtures, monkeypatch):
+    """A single failed heartbeat used to kill the heartbeat task silently; the lease then expired mid-job."""
+    eng = await fresh_engine(fixtures, job_heartbeat_seconds=0.3, job_lease_seconds=3, global_concurrency=2,
+                             respect_robots=False)
+    try:
+        calls = {"n": 0}
+        real = jobs.heartbeat
+
+        async def flaky(*a, **k):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ConnectionError("db blip")
+            return await real(*a, **k)
+        monkeypatch.setattr(jobs, "heartbeat", flaky)
+        slow = [s for s in fixtures.state.sites.values() if s.kind == "slow"][:4]
+        info = await jobs.create_job_from_companies(eng.db, eng.settings, [{"website": url_of(fixtures, s)} for s in slow], requested=["company_name"])
+        await run_worker(eng)
+        assert calls["n"] >= 3                                    # kept beating after the failure
+        st = await jobs.job_status(eng.db, info["job_id"])
+        assert st["status"] == "completed" and st["counts"]["succeeded"] == 4
+    finally:
+        await eng.stop()
+
+
+async def test_two_workers_never_process_the_same_item_twice(fixtures):
+    eng = await fresh_engine(fixtures, global_concurrency=4, max_concurrent_jobs=2)
+    try:
+        cos = [{"website": f"http://c{i}.fixture.test:{fixtures.port}/"} for i in range(40)]
+        a = await jobs.create_job_from_companies(eng.db, eng.settings, cos[:20], requested=["email"])
+        b = await jobs.create_job_from_companies(eng.db, eng.settings, cos[20:], requested=["email"])
+        w1, w2 = Worker(eng), Worker(eng)
+        await asyncio.wait_for(asyncio.gather(w1.run(once=True), w2.run(once=True)), 60)
+        async with eng.db.connection() as c:
+            rows = await (await c.execute("SELECT job_id, count(*) n, max(attempts) mx, min(attempts) mn FROM job_items GROUP BY job_id")).fetchall()
+            runs = (await (await c.execute("SELECT count(*) n, count(DISTINCT (job_id,row_index)) d FROM enrichment_runs")).fetchone())
+        assert all(r["n"] == 20 and r["mx"] == 1 and r["mn"] == 1 for r in rows)
+        assert runs["n"] == runs["d"] == 40                       # one enrichment run per item, no duplicates
+    finally:
+        await eng.stop()
+
+
+async def test_same_company_enriched_concurrently_yields_one_record_and_one_fetch(engine, fixtures):
+    s = site_of(fixtures, "plain")
+    rs = await asyncio.gather(*[engine.enricher.enrich(url_of(fixtures, s), requested=["email", "phone"]) for _ in range(6)])
+    assert all(r.outcome in ("enriched", "partial", "cached") for r in rs)
+    async with engine.db.connection() as c:
+        assert (await (await c.execute("SELECT count(*) n FROM companies")).fetchone())["n"] == 1
+        assert (await (await c.execute("SELECT count(*) n FROM company_fields WHERE field='email'")).fetchone())["n"] == 1
+    assert fixtures.state.count(s.host, "/") <= 2                 # single-flight; at most one race window

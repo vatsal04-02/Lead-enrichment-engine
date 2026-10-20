@@ -182,3 +182,43 @@ async def test_placeholder_user_agent_refuses_to_start_without_overrides():
     eng = Engine(Settings(database_url=s.database_url, user_agent="MyBot/1.0 (+https://x.example/bot; ops@x.example)"))
     await eng.start()
     await eng.stop()
+
+
+# ------------------------------------------------------------------ job budgets: clients cannot lift server limits
+def test_client_budget_cannot_exceed_or_disable_server_limits():
+    from leadengine import jobs
+    s = Settings(budget_pages=1000, budget_ai_calls=50, ai_provider="anthropic", budget_seconds=600,
+                 budget_est_cost_usd=5.0, budget_browser_ops=20, browser_enabled=True)
+    b = jobs.default_budget(s, {"pages": 0, "seconds": 0, "est_cost_usd": 0, "ai_calls": 10**9, "browser_ops": 5})
+    assert b == {"pages": 1000, "ai_calls": 50, "browser_ops": 5, "seconds": 600, "est_cost_usd": 5.0}
+    assert jobs.default_budget(s, {"pages": 10})["pages"] == 10
+    with pytest.raises(jobs.JobError):
+        jobs.default_budget(s, {"pages": -1})
+    with pytest.raises(jobs.JobError):
+        jobs.default_budget(s, {"bogus": 1})
+    with pytest.raises(jobs.JobError):
+        jobs.default_budget(s, {"pages": "lots"})
+    # an operator who configured "unlimited" (0) lets clients choose their own limit
+    free = Settings(budget_pages=0)
+    assert jobs.default_budget(free, {"pages": 7})["pages"] == 7
+
+
+def test_invalid_configuration_is_rejected_at_startup():
+    from pydantic import ValidationError
+    for bad in [dict(global_concurrency=0), dict(queue_size=0), dict(per_domain_concurrency=0), dict(total_timeout=0),
+                dict(job_heartbeat_seconds=60, job_lease_seconds=60), dict(max_response_bytes=0), dict(http_max_retries=-1),
+                dict(claim_batch_size=0), dict(max_pages_per_company=0)]:
+        with pytest.raises(ValidationError):
+            Settings(**bad)
+
+
+def test_secrets_never_appear_in_settings_repr_or_logs():
+    s = Settings(api_token="tok-supersecret", database_url="postgresql://user:hunter2@db.internal/prod",
+                 egress_proxy="http://pu:ppw@proxy:3128")
+    shown = repr(s) + str(s) + str(s.model_dump())
+    for secret in ("tok-supersecret", "hunter2", "ppw"):
+        assert secret not in shown
+    assert s.api_token.get_secret_value() == "tok-supersecret"
+    from leadengine.security import sanitize_for_log
+    out = sanitize_for_log("ConnectError via http://pu:ppw@proxy:3128 Authorization: Bearer abc.def-123 key sk-ant-api03-ZZZZ_yy")
+    assert "ppw" not in out and "abc.def-123" not in out and "ZZZZ" not in out

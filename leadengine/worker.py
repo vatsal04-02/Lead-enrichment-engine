@@ -62,7 +62,7 @@ class Worker:
             if job:
                 t = asyncio.create_task(self._run_job(job))
                 self._active.add(t)
-                t.add_done_callback(self._active.discard)
+                t.add_done_callback(self._job_done)
                 continue
             if once and not self._active:
                 return
@@ -71,6 +71,12 @@ class Worker:
             except asyncio.TimeoutError:
                 pass
         await self._drain()
+
+    def _job_done(self, t: asyncio.Task) -> None:
+        self._active.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            # never swallow: the job stays leased and will be recovered by another worker after the lease expires
+            log.error("job task crashed: %r", t.exception(), exc_info=t.exception())
 
     async def _drain(self) -> None:
         """After a stop request: give in-flight work `shutdown_grace_seconds`, then cancel what is left.
@@ -101,9 +107,23 @@ class Worker:
         log.info("job %s claimed by %s (attempt %s)", job_id, self.id, job["attempts"])
 
         async def beat():
+            """Renew the lease. A transient DB error must not kill this task (an unrenewed lease would let
+            another worker steal live work): retry on the next tick, and give up only once the lease has
+            actually run out, at which point this worker must stop touching the job."""
+            last_ok = time.monotonic()
             while not (done_claiming.is_set() and not inflight and queue.empty()):
                 await asyncio.sleep(s.job_heartbeat_seconds)
-                hb = await jobs.heartbeat(db, s, job_id, self.id, budget.snapshot())
+                try:
+                    hb = await jobs.heartbeat(db, s, job_id, self.id, budget.snapshot())
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    log.exception("job %s: heartbeat failed", job_id)
+                    if time.monotonic() - last_ok >= s.job_lease_seconds:
+                        lost_lease.set()
+                        return
+                    continue
+                last_ok = time.monotonic()
                 if not hb["owned"]:
                     lost_lease.set()
                     return

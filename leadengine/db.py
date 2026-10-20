@@ -16,7 +16,7 @@ class Database:
     def __init__(self, settings: Optional[Settings] = None):
         self.settings = settings or get_settings()
         self.pool = AsyncConnectionPool(
-            self.settings.database_url,
+            self.settings.database_url.get_secret_value(),
             min_size=self.settings.db_pool_min,
             max_size=self.settings.db_pool_max,
             kwargs={"row_factory": dict_row, "autocommit": False},

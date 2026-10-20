@@ -33,15 +33,29 @@ class JobError(ValueError):
     pass
 
 
+_BUDGET_KEYS = ("pages", "ai_calls", "browser_ops", "seconds", "est_cost_usd")
+
+
 def default_budget(s: Settings, overrides: Optional[dict] = None) -> dict:
-    b = {"pages": s.budget_pages, "ai_calls": s.budget_ai_calls if s.ai_provider else 0,
-         "browser_ops": s.budget_browser_ops if s.browser_enabled else 0,
-         "seconds": s.budget_seconds, "est_cost_usd": s.budget_est_cost_usd}
-    if overrides:
-        for k in b:
-            if k in overrides:
-                b[k] = overrides[k]
-    return b
+    """Server limits are ceilings: a client may lower a budget but never raise it or switch it off.
+    (Only when the operator configured 0 = unlimited may a client pick its own limit.)"""
+    server = {"pages": s.budget_pages, "ai_calls": s.budget_ai_calls if s.ai_provider else 0,
+              "browser_ops": s.budget_browser_ops if s.browser_enabled else 0,
+              "seconds": s.budget_seconds, "est_cost_usd": s.budget_est_cost_usd}
+    out = dict(server)
+    for k, v in (overrides or {}).items():
+        if k not in _BUDGET_KEYS:
+            raise JobError(f"unknown budget key {k!r}; valid: {list(_BUDGET_KEYS)}")
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0:
+            raise JobError(f"budget {k} must be a non-negative number")
+        limit = server[k]
+        if limit == 0:
+            out[k] = v                  # operator allows unlimited: client may choose (0 stays unlimited)
+        elif v == 0:
+            out[k] = limit              # "unlimited" requested but the server has a ceiling
+        else:
+            out[k] = min(v, limit)
+    return out
 
 
 async def _insert_job(db: Database, *, type_: str, input_ref: str, requested: list[str], config: dict,
