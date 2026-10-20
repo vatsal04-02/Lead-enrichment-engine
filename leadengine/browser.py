@@ -37,6 +37,14 @@ class BrowserRenderer:
         self.available: Optional[bool] = None
 
     async def _ensure(self) -> bool:
+        if self._browser and not self._browser.is_connected():      # crashed/closed: relaunch on next use
+            async with self._lock:
+                if self._browser and not self._browser.is_connected():
+                    try:
+                        await self._pw.stop()
+                    except Exception:
+                        pass
+                    self._browser = self._pw = None
         if self._browser:
             return True
         async with self._lock:
@@ -46,6 +54,11 @@ class BrowserRenderer:
                 from playwright.async_api import async_playwright
                 self._pw = await async_playwright().start()
                 args = ["--no-sandbox"] if hasattr(os, "geteuid") and os.geteuid() == 0 else []
+                # Defence in depth: everything legitimate is fulfilled by our guarded fetcher via route(), so Chromium
+                # never needs DNS; refuse name resolution for anything that slips past, and keep WebRTC off the network.
+                args += ["--host-resolver-rules=MAP * ~NOTFOUND",
+                         "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+                         "--webrtc-ip-handling-policy=disable_non_proxied_udp"]
                 self._browser = await self._pw.chromium.launch(
                     headless=True, args=args, executable_path=self.s.browser_executable or None)
                 self.available = True
@@ -73,7 +86,7 @@ class BrowserRenderer:
             if run is not None:
                 run.browser_ops += 1
             ctx = await self._browser.new_context(user_agent=self.s.user_agent, service_workers="block",
-                                                  java_script_enabled=True)
+                                                  java_script_enabled=True, accept_downloads=False)
             count = {"n": 0, "bytes": 0}
 
             async def handler(route):
@@ -88,8 +101,12 @@ class BrowserRenderer:
                 count["bytes"] += len(body)
                 await route.fulfill(status=status, headers=headers, body=body)
 
+            async def deny_ws(ws):          # WebSockets bypass context.route(); refuse every one of them
+                await ws.close()
+
             try:
                 await ctx.route("**/*", handler)
+                await ctx.route_web_socket("**/*", deny_ws)
                 page = await ctx.new_page()
                 await page.goto(url, wait_until="domcontentloaded", timeout=self.s.browser_timeout * 1000)
                 try:
