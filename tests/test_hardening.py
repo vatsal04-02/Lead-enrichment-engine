@@ -222,3 +222,49 @@ def test_secrets_never_appear_in_settings_repr_or_logs():
     from leadengine.security import sanitize_for_log
     out = sanitize_for_log("ConnectError via http://pu:ppw@proxy:3128 Authorization: Bearer abc.def-123 key sk-ant-api03-ZZZZ_yy")
     assert "ppw" not in out and "abc.def-123" not in out and "ZZZZ" not in out
+
+
+# ------------------------------------------------------------------ TLS failures are classified, not retried
+def _selfsigned(tmp_path):
+    import subprocess
+    key, crt = tmp_path / "k.pem", tmp_path / "c.pem"
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key), "-out", str(crt),
+                    "-days", "1", "-subj", "/CN=tls.fixture.test"], check=True, capture_output=True)
+    return str(crt), str(key)
+
+
+async def test_invalid_certificate_is_permanent_not_retried_and_not_downgraded(fixtures, tmp_path):
+    import ssl, shutil
+    if not shutil.which("openssl"):
+        pytest.skip("openssl CLI not available")
+    crt, key = _selfsigned(tmp_path)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(crt, key)
+    conns = []
+
+    async def h(r, w):
+        conns.append(1)
+        w.close()
+    srv = await asyncio.start_server(h, "127.0.0.1", 0, ssl=ctx)
+    port = srv.sockets[0].getsockname()[1]
+    eng = await fresh_engine(fixtures, http_max_retries=2, backoff_base=0.01, respect_robots=False)
+    try:
+        r = await eng.fetcher.fetch(f"https://tls.fixture.test:{port}/")
+        assert r.error_kind == "tls_cert" and not r.transient and r.retries == 0
+    finally:
+        await eng.stop(); srv.close()
+
+
+async def test_plain_http_server_on_https_url_is_a_single_non_retried_tls_failure(fixtures):
+    def handler(host, path):
+        return "200 OK", {"Content-Type": "text/html"}, HTML % b"a.fixture.test"
+    async with serve(handler) as (port, hits):
+        eng = await fresh_engine(fixtures, http_max_retries=2, backoff_base=0.01, respect_robots=False)
+        try:
+            r = await eng.fetcher.fetch(f"https://plain.fixture.test:{port}/")
+            assert r.error_kind == "tls" and not r.transient and r.retries == 0
+            # no scheme in the input => https first, then plain http as a documented fallback
+            res = await eng.enricher.enrich(f"plain.fixture.test:{port}", requested=["email"])
+            assert (await stored(eng, "plain.fixture.test", "email"))["value"] == "hello@a.fixture.test"
+        finally:
+            await eng.stop()

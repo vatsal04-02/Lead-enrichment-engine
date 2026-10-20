@@ -130,7 +130,7 @@ class Enricher:
         t2.attempted = True
         t0 = time.monotonic()
         home = await self.fetcher.fetch(ident.start_url, run, budget)
-        if not home.ok and home.error_kind in ("network", "timeout") and ident.scheme_assumed \
+        if not home.ok and home.error_kind in ("network", "timeout", "tls") and ident.scheme_assumed \
                 and ident.start_url.startswith("https://") and "DNS" not in home.error:
             home = await self.fetcher.fetch("http://" + ident.start_url[len("https://"):], run, budget)
         t2.ms += (time.monotonic() - t0) * 1000
@@ -312,7 +312,7 @@ class Enricher:
 
     async def _handle_home_failure(self, cid, ident, requested, plan, run, home, t_start, budget, job_id, row_index):
         permanent = (home.error_kind in ("blocked", "robots", "content_type", "too_large", "bot_challenge",
-                                         "redirected_off_domain")
+                                         "redirected_off_domain", "tls", "tls_cert")
                      or (home.error_kind == "http" and home.status in PERMANENT_HTTP)
                      or (home.error_kind == "network" and "DNS resolution failed" in home.error))
         if home.error_kind == "budget":
@@ -396,7 +396,8 @@ def _metrics_json(run: RunMetrics, cost_total: float) -> dict:
         "tiers": {k: {"attempted": v.attempted, "ms": round(v.ms, 1), "requests": v.requests,
                       "fields_found": v.fields_found, "cost_usd": round(v.cost_usd, 8), "note": v.note}
                   for k, v in run.tiers.items()},
-        "cost": {"total_usd_estimated": round(cost_total, 8), "http_usd_estimated": round(run.cost_http_usd, 8),
+        "cost": {"ai_tokens_in": run.ai_tokens_in, "ai_tokens_out": run.ai_tokens_out,
+                 "browser_seconds": round(run.browser_seconds, 3), "total_usd_estimated": round(cost_total, 8), "http_usd_estimated": round(run.cost_http_usd, 8),
                  "ai_usd_estimated": round(run.cost_ai_usd, 8), "browser_usd_estimated": round(run.cost_browser_usd, 8),
                  "basis": "tokens/seconds/requests are measured; USD uses the configured LE_* price settings, "
                           "so every USD figure is an estimate; infrastructure/compute cost excluded"},

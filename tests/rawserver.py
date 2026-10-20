@@ -12,7 +12,12 @@ async def serve(handler):
 
     async def h(r, w):
         try:
-            req = (await r.readuntil(b"\r\n\r\n")).decode("latin-1")
+            first = await r.readexactly(1)
+            if first == b"\x16":        # a TLS ClientHello hitting a plain-HTTP port: real servers answer 400 and hang up
+                w.write(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
+                await w.drain()
+                return
+            req = (first + await r.readuntil(b"\r\n\r\n")).decode("latin-1")
             path = req.split()[1]
             host = next((l.split(":", 1)[1].strip().split(":")[0] for l in req.split("\r\n") if l.lower().startswith("host:")), "")
             hits.append((host, path))

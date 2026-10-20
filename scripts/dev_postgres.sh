@@ -24,7 +24,7 @@ case "$cmd" in
     if ! run "$PGBIN/pg_ctl -D '$PGDATA' status >/dev/null 2>&1"; then
       run "$PGBIN/pg_ctl -D '$PGDATA' -o '-p $PGPORT -c listen_addresses=127.0.0.1 -c fsync=off -c unix_socket_directories=/tmp' -l '$PGDATA/server.log' -w start >/dev/null"
     fi
-    for db in enrich enrich_test; do   # enrich: app/benchmarks; enrich_test: pytest (tests TRUNCATE everything)
+    for db in enrich enrich_test enrich_pilot; do   # enrich: app/benchmarks; enrich_test: pytest (tests TRUNCATE everything)
       run "$PGBIN/psql -h 127.0.0.1 -p $PGPORT -U enrich -d postgres -tc \"select 1 from pg_database where datname='$db'\" | grep -q 1 || $PGBIN/createdb -h 127.0.0.1 -p $PGPORT -U enrich $db"
     done
     echo "postgresql://enrich@127.0.0.1:$PGPORT/enrich"

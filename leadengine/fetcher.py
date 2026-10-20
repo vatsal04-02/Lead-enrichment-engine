@@ -10,6 +10,7 @@ import email.utils
 import hashlib
 import random
 import re
+import ssl
 import time
 import zlib
 from dataclasses import dataclass, field
@@ -163,6 +164,20 @@ def _retry_after_seconds(value: Optional[str]) -> Optional[float]:
         return max(0.0, (dt - datetime.now(timezone.utc)).total_seconds())
     except (TypeError, ValueError):
         return None
+
+
+def _tls_kind(exc: BaseException) -> str:
+    """'tls_cert' for certificate validation failures (never retried or downgraded), 'tls' for other handshake
+    failures (e.g. a plain-HTTP server on port 443), '' if the error is not TLS-related."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, ssl.SSLCertVerificationError):
+            return "tls_cert"
+        if isinstance(exc, ssl.SSLError):
+            return "tls"
+        exc = exc.__cause__ or exc.__context__
+    return ""
 
 
 def decode_body(raw: bytes, content_type: str) -> str:
@@ -362,7 +377,7 @@ class Fetcher:
                 if isinstance(e.__cause__, BlockedDestination):
                     return FetchResult(url=url, final_url=current, error_kind="blocked",
                                        error=sanitize_for_log(str(e.__cause__)))
-                return FetchResult(url=url, final_url=current, error_kind="network",
+                return FetchResult(url=url, final_url=current, error_kind=_tls_kind(e) or "network",
                                    error=sanitize_for_log(f"{type(e).__name__}: {e}"))
             except BlockedDestination as e:
                 return FetchResult(url=url, final_url=current, error_kind="blocked",
@@ -504,6 +519,8 @@ class Fetcher:
             return False, "robots", "robots.txt access denied (HTTP 401/403) — treated as disallow"
         if mode == "blocked":
             return False, "blocked", "robots.txt destination blocked"
+        if mode in ("tls", "tls_cert"):
+            return False, mode, f"TLS failure while fetching robots.txt ({mode})"
         if delay and delay > self.s.max_crawl_delay:
             return False, "robots", f"robots.txt Crawl-delay {delay}s exceeds LE_MAX_CRAWL_DELAY={self.s.max_crawl_delay}s"
         if parser is None or parser.can_fetch(self.s.user_agent, url):
@@ -524,6 +541,8 @@ class Fetcher:
             return horizon, None, "allow_all", None          # RFC 9309: other 4xx => no restrictions
         if res.error_kind == "blocked":
             return horizon, None, "blocked", None
+        if res.error_kind in ("tls", "tls_cert"):
+            return horizon, None, res.error_kind, None
         if res.error_kind in ("content_type", "too_large"):
             return horizon, None, "allow_all", None
         return time.monotonic() + 120, None, "disallow_all", None   # 5xx/timeouts: be conservative, retry soon
