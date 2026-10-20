@@ -1,0 +1,364 @@
+{
+  "mode": "FIXTURE pilot (synthetic)",
+  "timestamp": "2026-10-20T19:48:37+00:00",
+  "hardware": {
+    "platform": "Linux-6.18.44-fc-v139-x86_64-with-glibc2.39",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "logical_cpus": 4,
+    "memory": "15.7 GiB",
+    "python": "3.13.16",
+    "postgres": "16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) (local, same machine, fsync=off)",
+    "git_commit": "e176bd8"
+  },
+  "git_commit": "e176bd8",
+  "sample": "<50 synthetic fixture sites>",
+  "sample_sha256": "625aedba0cb073ebb92b8f2c4fb6d1fd2c349c65922d8feb9bf76b0db53265df",
+  "sample_size": 50,
+  "job_id": "c82496a0-9d3b-4cfb-9764-ea0e7bb154ef",
+  "settings": {
+    "global_concurrency": 4,
+    "per_domain_concurrency": 1,
+    "per_domain_min_delay": 0.5,
+    "max_pages_per_company": 3,
+    "http_max_retries": 1,
+    "total_timeout": 20.0,
+    "max_response_bytes": 2000000,
+    "max_redirects": 5,
+    "respect_robots": true,
+    "browser_enabled": true,
+    "ai_provider": "",
+    "ai_model": "claude-haiku-5-5",
+    "user_agent": "LeadEnrichmentPilotFixture/1.0"
+  },
+  "results": {
+    "volume": {
+      "input_rows": {
+        "value": 50,
+        "label": "MEASURED"
+      },
+      "unique_companies_attempted": {
+        "value": 50,
+        "label": "MEASURED"
+      },
+      "succeeded": {
+        "value": 49,
+        "label": "MEASURED"
+      },
+      "failed": {
+        "value": 1,
+        "label": "MEASURED"
+      },
+      "skipped": {
+        "value": 0,
+        "label": "MEASURED"
+      },
+      "invalid_rows": {
+        "value": 0,
+        "label": "MEASURED"
+      },
+      "duplicate_rows": {
+        "value": 0,
+        "label": "MEASURED"
+      },
+      "duplicate_rate": {
+        "value": 0.0,
+        "label": "MEASURED"
+      },
+      "failure_reasons": {
+        "value": {
+          "unreachable_http": 1
+        },
+        "label": "MEASURED"
+      }
+    },
+    "coverage_presence_only": {
+      "note": "presence of a value, NOT correctness; denominator = unique companies attempted",
+      "domain": {
+        "value": 1.0,
+        "label": "MEASURED",
+        "note": "input field: every attempted company has one by construction"
+      },
+      "website_reachable_and_domain_verified": {
+        "value": 0.98,
+        "label": "MEASURED",
+        "note": "procedure: http_reachable_domain_match"
+      },
+      "company_name": {
+        "value": 0.64,
+        "label": "MEASURED"
+      },
+      "phone": {
+        "value": 0.88,
+        "label": "MEASURED"
+      },
+      "email": {
+        "value": 0.92,
+        "label": "MEASURED"
+      },
+      "address": {
+        "value": 0.38,
+        "label": "MEASURED"
+      },
+      "description": {
+        "value": 0.64,
+        "label": "MEASURED"
+      },
+      "linkedin_url": {
+        "value": 0.38,
+        "label": "MEASURED"
+      },
+      "email_mailbox_verified": {
+        "value": 0,
+        "label": "MEASURED",
+        "note": "no mailbox-level verification procedure exists; e-mail is never marked verified"
+      },
+      "email_syntax_valid_share_of_emails": {
+        "value": 1.0,
+        "label": "MEASURED"
+      }
+    },
+    "usable_record_rate": {
+      "presence_only": {
+        "value": 0.64,
+        "label": "MEASURED",
+        "note": "definition: company_name AND (email OR phone) present; correctness NOT checked"
+      },
+      "audited": {
+        "value": null,
+        "label": "UNKNOWN",
+        "note": "run `score` on a human-completed audit sheet"
+      }
+    },
+    "accuracy": {
+      "value": null,
+      "label": "UNKNOWN",
+      "note": "requires the manual audit sheet (`score`)"
+    },
+    "performance": {
+      "wall_seconds": {
+        "value": 25.2,
+        "label": "MEASURED"
+      },
+      "throughput_companies_per_minute": {
+        "value": 119.03,
+        "label": "MEASURED"
+      },
+      "latency_ms_p50": {
+        "value": 2058.5,
+        "label": "MEASURED"
+      },
+      "latency_ms_p95": {
+        "value": 3061.8,
+        "label": "MEASURED"
+      },
+      "http_requests_per_company": {
+        "value": 4.3,
+        "label": "MEASURED",
+        "note": "includes robots.txt and retries"
+      },
+      "retry_rate": {
+        "value": 0.0279,
+        "label": "MEASURED",
+        "note": "retries / requests sent"
+      },
+      "browser_fallback_rate": {
+        "value": 0.06,
+        "label": "MEASURED"
+      },
+      "ai_calls_per_company": {
+        "value": 0.0,
+        "label": "MEASURED"
+      }
+    },
+    "ai_cost": {
+      "tokens_in": {
+        "value": 0,
+        "label": "MEASURED"
+      },
+      "tokens_out": {
+        "value": 0,
+        "label": "MEASURED"
+      },
+      "per_1000_attempted_usd": {
+        "value": 0.0,
+        "label": "MEASURED",
+        "note": "no AI calls were made"
+      },
+      "per_1000_usable_usd": {
+        "value": 0.0,
+        "label": "MEASURED",
+        "note": "no AI calls were made"
+      },
+      "infrastructure": {
+        "value": null,
+        "label": "UNKNOWN",
+        "note": "not provided; excluded from all cost figures"
+      }
+    },
+    "fetch_log_breakdown": {
+      "value": {
+        "http": 1,
+        "tls": 100,
+        "ok": 158
+      },
+      "label": "MEASURED"
+    },
+    "tiers": {
+      "tier1_existing": {
+        "attempted": 50,
+        "success_rate": 0.0,
+        "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+        "fields_found": 0,
+        "latency_ms_p50": 1.4,
+        "latency_ms_p95": 4.3,
+        "requests": 0,
+        "cost_usd_estimated": 0.0
+      },
+      "tier2_http": {
+        "attempted": 50,
+        "success_rate": 0.68,
+        "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+        "fields_found": 168,
+        "latency_ms_p50": 1048.0,
+        "latency_ms_p95": 2095.8,
+        "requests": 156,
+        "cost_usd_estimated": 0.0
+      },
+      "tier3_targeted": {
+        "attempted": 25,
+        "success_rate": 0.36,
+        "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+        "fields_found": 18,
+        "latency_ms_p50": 989.7,
+        "latency_ms_p95": 992.7,
+        "requests": 50,
+        "cost_usd_estimated": 0.0
+      },
+      "tier4_browser": {
+        "attempted": 3,
+        "success_rate": 1.0,
+        "success_def": "share of attempts that yielded >=1 field not already found by earlier tiers",
+        "fields_found": 6,
+        "latency_ms_p50": 2054.8,
+        "latency_ms_p95": 2389.7,
+        "requests": 9,
+        "cost_usd_estimated": 0.0
+      }
+    }
+  },
+  "artifacts": {
+    "provenance_csv": "/home/user/Lead-enrichment-engine/benchmarks/results/pilot-20261020-194811-provenance.csv",
+    "fetch_log_jsonl": "/home/user/Lead-enrichment-engine/benchmarks/results/pilot-20261020-194811-fetch-log.jsonl",
+    "audit_sheet": "/home/user/Lead-enrichment-engine/benchmarks/results/pilot-20261020-194811-audit.csv",
+    "audit_rows": 158
+  },
+  "limitations": [
+    "Coverage is presence, not correctness; accuracy comes only from the human audit sheet.",
+    "Sample of 50 hand-picked sites: not statistically representative of any larger population.",
+    "One pass; results depend on time of day, network path and the sites' current content.",
+    "Politeness delay (>=2 s per host) dominates throughput; do not extrapolate to larger runs without re-measuring."
+  ],
+  "fixture_auto_audit": {
+    "per_field": {
+      "address": {
+        "correct": 19,
+        "incorrect": 0,
+        "unsure": 0,
+        "precision": {
+          "value": 1.0,
+          "label": "MEASURED",
+          "note": "share of judged returned values that are correct (unsure excluded)"
+        },
+        "wilson95": [
+          0.832,
+          1.0
+        ]
+      },
+      "company_name": {
+        "correct": 30,
+        "incorrect": 0,
+        "unsure": 0,
+        "precision": {
+          "value": 1.0,
+          "label": "MEASURED",
+          "note": "share of judged returned values that are correct (unsure excluded)"
+        },
+        "wilson95": [
+          0.886,
+          1.0
+        ]
+      },
+      "description": {
+        "correct": 30,
+        "incorrect": 0,
+        "unsure": 0,
+        "precision": {
+          "value": 1.0,
+          "label": "MEASURED",
+          "note": "share of judged returned values that are correct (unsure excluded)"
+        },
+        "wilson95": [
+          0.886,
+          1.0
+        ]
+      },
+      "email": {
+        "correct": 30,
+        "incorrect": 0,
+        "unsure": 0,
+        "precision": {
+          "value": 1.0,
+          "label": "MEASURED",
+          "note": "share of judged returned values that are correct (unsure excluded)"
+        },
+        "wilson95": [
+          0.886,
+          1.0
+        ]
+      },
+      "linkedin_url": {
+        "correct": 19,
+        "incorrect": 0,
+        "unsure": 0,
+        "precision": {
+          "value": 1.0,
+          "label": "MEASURED",
+          "note": "share of judged returned values that are correct (unsure excluded)"
+        },
+        "wilson95": [
+          0.832,
+          1.0
+        ]
+      },
+      "phone": {
+        "correct": 30,
+        "incorrect": 0,
+        "unsure": 0,
+        "precision": {
+          "value": 1.0,
+          "label": "MEASURED",
+          "note": "share of judged returned values that are correct (unsure excluded)"
+        },
+        "wilson95": [
+          0.886,
+          1.0
+        ]
+      }
+    },
+    "overall_precision": {
+      "value": 1.0,
+      "label": "MEASURED"
+    },
+    "overall_wilson95": [
+      0.976,
+      1.0
+    ],
+    "rows_without_verdict": 0,
+    "recall": {
+      "value": null,
+      "label": "UNKNOWN",
+      "note": "needs a ground-truth value for fields the engine did NOT return"
+    },
+    "caveat": "sample size is small; read the interval, not the point estimate. Reviewer judgement is subjective for 'description'."
+  }
+}

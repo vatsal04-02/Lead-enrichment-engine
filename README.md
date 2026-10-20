@@ -209,36 +209,33 @@ Migrations must be additive; destructive changes (drops/rewrites) are never appl
 * Secrets: configuration only via environment; API keys are never logged or returned; errors stored/returned are sanitised.
 * The `LE_HOST_OVERRIDES` setting exists **only** for tests/benchmarks to point fixture hostnames at localhost.
 
-## Measured results (local fixtures only — not the real web)
+## Measured results (local synthetic fixtures only — not the real web)
 
-Full tables: `benchmarks/results/local-20261020-190805.md` (no per-domain delay) and `…-191329.md` (0.5 s per-domain delay);
-definitions and limitations: `benchmarks/README.md`.
+Tables: `benchmarks/results/local-20261020-194507.md` (no per-domain delay) and `…-194645.md` (0.5 s per-domain delay), run on the
+Stage-4-hardened code (engine code identical to `a4bd432`); the earlier pre-hardening runs (`…-190805`, `…-191329`) are kept for
+comparison and agree within 1 %. Definitions and limitations: `benchmarks/README.md`.
 
-* Hardware: 4 logical vCPU Intel Xeon @ 2.1 GHz, 15.7 GiB RAM, Python 3.13.16, PostgreSQL 16.15 **on the same machine with fsync off**,
+* Hardware: 4 logical vCPU Intel Xeon @ 2.1 GHz, 15.7 GiB RAM, Python 3.13.16, PostgreSQL 16.15 **on the same machine, fsync off**,
   fixture server in a separate process, simulated 40 ms response latency. Sample: 300 synthetic sites + 15 seeded duplicate rows,
-  one run per configuration (no repeats, so no confidence intervals), code at commit `ed14b45`.
-* Politeness-limited (0.5 s per-domain delay, the default): 139 companies/min at concurrency 4 → 502 at 16 → **658 at 32** (best),
-  then 629 at 64 and 583 at 128 (more concurrency only adds queueing latency). Engine process ≤ 0.43 core, peak RSS 88–95 MB.
-* Engine ceiling (no per-domain delay): 133/min at 1 → 549 at 4 → 888 at 8 → 1,139 at 16 → **1,169 at 32**, 1,018 at 64. The plateau
-  is not CPU saturation (≤ 0.59 core); with only 300 sites each run lasts 15–135 s and the deliberately slow/flaky fixtures'
-  tail (1–2.4 s) matters, so treat the plateau location as ±1 step.
-* Per company (0.5 s delay, c=32): 3.8 HTTP requests, ~1.8 KB downloaded, 0 AI calls (none configured), browser used for 5 % of
-  companies (all JS-shell fixtures); the browser tier is by far the slowest (p50 ≈ 8.8 s vs ≈ 0.6 s for tier 2).
-* Quality vs ground truth: required-field coverage (name/email/phone) 97.9 %; **0 wrong and 0 invented values** among returned
-  fields (includes prompt-injection fixtures); usable-record rate 63 % — the rest are by design: sites that block robots/404/
-  huge/redirect-to-metadata (7 %), contact-only pages with no name, JS shells whose name lives only in an `<h1>`, and prose-only
-  pages that only the (here disabled) AI tier could read. Duplicate rate 4.8 % (none enriched twice).
-* Cost: no AI/browser/HTTP unit prices were configured, so the runs report **no USD cost**; measured usage is in the JSON
-  (1,144 HTTP requests, 553 KB, 15 browser renders, 0 AI calls for 300 companies). **No cost per 1,000 records is claimed.**
+  **one run per configuration** (no repeats, so no confidence intervals).
+* With the default 0.5 s per-host delay: 483 companies/min at concurrency 16, **655 at 32** (best), 604 at 64. Engine process
+  ≤ 0.41 core, peak RSS 86–90 MB.
+* Without a per-host delay (engine ceiling): 252/min at 2, 868 at 8, 1,135 at 16, **1,167 at 32**. Not CPU saturation (≤ 0.63 core);
+  runs last only 15–70 s, so the deliberately slow/flaky fixtures' tail matters: treat the plateau as ±1 step.
+* Per company: 3.8 HTTP requests (incl. robots.txt), ~1.8 KB, 0 AI calls (none configured), browser fallback for 5 % of companies
+  (the JS-shell fixtures; browser p50 ≈ 8.8 s vs ≈ 0.6 s for plain HTTP).
+* Against ground truth: required-field coverage 97.9 %, **0 wrong / 0 invented values**, usable-record rate 63 % (by design:
+  blocked/404/oversized/metadata-redirect sites 7 %, no-name contact pages, JS shells whose name is only in an `<h1>`, prose-only
+  pages that only the AI tier could read), duplicate rate 4.8 % (none enriched twice). These fixtures were written by the same
+  author as the extractor, so this is a regression signal, not a real-world accuracy estimate.
+* Cost: no unit prices configured ⇒ no USD cost reported; measured usage only. **No cost per 1,000 records is claimed.**
+* Stage-4 claim query at 200k job rows: 35–57 ms → 1.6–3.2 ms after the open-items index (measured).
 
 ### Not measured / not verified (needs credentials, network or time)
 
-* **Live websites**: this sandbox's egress policy blocks arbitrary sites (HTTP 403 on CONNECT), so `benchmarks/run_live.py` was
-  written and its refusal guards exercised only by reading; it has **never been run**. Real-web coverage, accuracy, latency and
-  cost are therefore unknown. Run it (`--confirm-permitted`, real `LE_USER_AGENT`, `--audit 25`) before quoting any number.
-* **The LLM tier** is covered by unit/integration tests with a fake provider (grounding, schema, budget, invalid replies) but was
-  **never called against the real Anthropic API** (no key here). `AnthropicProvider` follows the documented SDK call
-  (`output_config` json_schema + `effort: low`) but is unexercised.
-* **`LE_EGRESS_PROXY` mode**, multi-worker-process scaling, and tables larger than a few thousand rows were not tested.
-* No migrations framework: `schema.sql` is idempotent (`CREATE … IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS`); destructive
-  schema changes would need manual migration.
+* **Live websites**: this sandbox blocks outbound requests to arbitrary sites. `benchmarks/pilot.py` was exercised only on
+  synthetic fixtures; **no real site has ever been contacted**. Real-world coverage, accuracy, latency, cost are unknown.
+* **The LLM tier** is tested only with a fake provider; never called against the real API.
+* **`LE_EGRESS_PROXY` mode**, multi-worker-process load, and tables beyond ~10^5 rows (other than the claim-query probe) were not tested.
+* No retention/GC job for `http_cache`, `extraction_cache`, `enrichment_runs`, `fetch_log`; no PII deletion tooling.
+* E-mail addresses are never mailbox-verified.

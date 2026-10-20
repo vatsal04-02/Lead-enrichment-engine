@@ -388,3 +388,45 @@ async def test_sigkilled_worker_process_loses_no_work(fixtures):
         assert att <= 2 and dup == 0 and comps == n
     finally:
         await eng.stop()
+
+
+# ---------------------------------------------------------------- previously untested claims, now covered
+def test_budget_dimensions_and_backpressure_logic():
+    from leadengine.budget import Budget
+    from leadengine.worker import Backpressure
+    b = Budget(pages=2, ai_calls=1, browser_ops=1, est_cost_usd=0.5)
+    assert b.allows("pages") and b.allows("pages", 2) and not b.allows("pages", 3)
+    b.charge("pages", 2)
+    assert not b.allows("pages") and "pages" in b.exhausted_reasons and b.allows("ai_calls")
+    b.add_cost(0.5)
+    assert not b.allows("ai_calls") or "est_cost_usd" in b.exhausted_reasons
+    assert "est_cost_usd" in b.exhausted_reasons
+    t = Budget(seconds=1)
+    assert t.allows("pages")
+    t.spent_seconds_prior = 2
+    assert not t.allows("pages") and "seconds" in t.exhausted_reasons
+    snap = Budget.from_config({"pages": 5}, {"pages": 3, "seconds": 7}).snapshot()
+    assert snap["pages"] == 3 and snap["seconds"] >= 7                     # spend survives a worker restart
+    bp = Backpressure()
+    for _ in range(20):
+        bp.record(True)                                                    # sustained transient failures => slow down
+    assert bp.delay >= 1.0
+    for _ in range(60):
+        bp.record(False)
+    assert bp.delay == 0.0                                                 # and recover
+
+
+async def test_time_budget_stops_claiming_and_reports_skipped_rows(fixtures):
+    eng = await fresh_engine(fixtures, global_concurrency=1, respect_robots=False, claim_batch_size=1, queue_size=2)
+    try:
+        slow = [s for s in fixtures.state.sites.values() if s.kind == "slow"][:4]
+        info = await jobs.create_job_from_companies(eng.db, eng.settings, [{"website": url_of(fixtures, s)} for s in slow],
+                                                    requested=["company_name"], budget={"seconds": 1})
+        await run_worker(eng)
+        st = await jobs.job_status(eng.db, info["job_id"])
+        assert st["status"] == "partially_completed"
+        assert 1 <= st["counts"]["succeeded"] < 4 and st["counts"]["skipped"] >= 1
+        assert st["error_summary"].get("budget_exhausted", 0) == st["counts"]["skipped"]
+        assert "seconds" in st["stats"]["budget_spent"]["exhausted"]
+    finally:
+        await eng.stop()

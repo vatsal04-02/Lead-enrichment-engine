@@ -1,0 +1,159 @@
+domain,field,value,source_url,method,verdict (correct|incorrect|unsure),notes
+c0.fixture.test,address,"194 Elm St, Denver, CO",http://c0.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c1.fixture.test,address,"590 Harbor Way, Austin, TX",http://c1.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c10.fixture.test,address,"746 Station Rd, Madison, WI",http://c10.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c14.fixture.test,address,"807 Pine Rd, Leeds, ENG",http://c14.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c16.fixture.test,address,"629 Harbor Way, Madison, WI",http://c16.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c18.fixture.test,address,"232 Harbor Way, Portland, OR",http://c18.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c22.fixture.test,address,"570 Main St, Leeds, ENG",http://c22.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c25.fixture.test,address,"118 Oak Ave, Leeds, ENG",http://c25.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c28.fixture.test,address,"618 Station Rd, Denver, CO",http://c28.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c3.fixture.test,address,"129 Oak Ave, Portland, OR",http://c3.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c34.fixture.test,address,"558 Elm St, Leeds, ENG",http://c34.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c38.fixture.test,address,"848 Pine Rd, Austin, TX",http://c38.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c40.fixture.test,address,"57 Pine Rd, Leeds, ENG",http://c40.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c41.fixture.test,address,"158 Elm St, Madison, WI",http://c41.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c47.fixture.test,address,"324 Harbor Way, Madison, WI",http://c47.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c48.fixture.test,address,"372 Market St, Madison, WI",http://c48.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c6.fixture.test,address,"733 Station Rd, Portland, OR",http://c6.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c7.fixture.test,address,"380 Oak Ave, Leeds, ENG",http://c7.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c9.fixture.test,address,"970 Harbor Way, Portland, OR",http://c9.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c0.fixture.test,company_name,Quartz Co 0,http://c0.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c1.fixture.test,company_name,Fjord Labs 1,http://c1.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c10.fixture.test,company_name,Acme Group 10,http://c10.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c12.fixture.test,company_name,Acme Labs 12,http://c12.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c14.fixture.test,company_name,Harbor Works 14,http://c14.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c16.fixture.test,company_name,Tundra Labs 16,http://c16.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c17.fixture.test,company_name,Tundra Studio 17,http://c17.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c18.fixture.test,company_name,Birch Studio 18,http://c18.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c19.fixture.test,company_name,Delta Studio 19,http://c19.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c22.fixture.test,company_name,Meridian Works 22,http://c22.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c25.fixture.test,company_name,Keystone Co 25,http://c25.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c28.fixture.test,company_name,Meridian Group 28,http://c28.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c29.fixture.test,company_name,Summit Co 29,http://c29.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c3.fixture.test,company_name,Acme Works 3,http://c3.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c30.fixture.test,company_name,Fjord Co 30,http://c30.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c33.fixture.test,company_name,Harbor Group 33,http://c33.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c34.fixture.test,company_name,Cobalt Works 34,http://c34.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c36.fixture.test,company_name,Orchid Group 36,http://c36.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c38.fixture.test,company_name,Granite Works 38,http://c38.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c4.fixture.test,company_name,Delta Studio 4,http://c4.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c40.fixture.test,company_name,Harbor Co 40,http://c40.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c41.fixture.test,company_name,Quartz Group 41,http://c41.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c44.fixture.test,company_name,Delta Partners 44,http://c44.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c46.fixture.test,company_name,Ivory Studio 46,http://c46.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c47.fixture.test,company_name,Orchid Partners 47,http://c47.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c48.fixture.test,company_name,Pioneer Labs 48,http://c48.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c5.fixture.test,company_name,Birch Labs 5,http://c5.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c7.fixture.test,company_name,Lumen Works 7,http://c7.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c8.fixture.test,company_name,Ivory Labs 8,http://c8.fixture.test:46717/,title,correct,auto-judged against fixture ground truth
+c9.fixture.test,company_name,Ember Group 9,http://c9.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c0.fixture.test,description,Quartz Co 0 provides legal services services to local businesses and households in Denver.,http://c0.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c1.fixture.test,description,Fjord Labs 1 provides landscaping services to local businesses and households in Austin.,http://c1.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c12.fixture.test,description,Acme Labs 12 provides legal services services to local businesses and households in Portland.,http://c12.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c14.fixture.test,description,Harbor Works 14 provides landscaping services to local businesses and households in Leeds.,http://c14.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c16.fixture.test,description,Tundra Labs 16 provides accounting services to local businesses and households in Madison.,http://c16.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c17.fixture.test,description,Tundra Studio 17 provides landscaping services to local businesses and households in Madison.,http://c17.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c18.fixture.test,description,Birch Studio 18 provides accounting services to local businesses and households in Portland.,http://c18.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c19.fixture.test,description,Delta Studio 19 provides legal services services to local businesses and households in Leeds.,http://c19.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c21.fixture.test,description,Granite Group 21 provides accounting services to local businesses and households in Madison.,http://c21.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c22.fixture.test,description,Meridian Works 22 provides dental care services to local businesses and households in Leeds.,http://c22.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c25.fixture.test,description,Keystone Co 25 provides logistics services to local businesses and households in Leeds.,http://c25.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c29.fixture.test,description,Summit Co 29 provides dental care services to local businesses and households in Denver.,http://c29.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c3.fixture.test,description,Acme Works 3 provides plumbing services to local businesses and households in Portland.,http://c3.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c30.fixture.test,description,Fjord Co 30 provides dental care services to local businesses and households in Austin.,http://c30.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c33.fixture.test,description,Harbor Group 33 provides legal services services to local businesses and households in Austin.,http://c33.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c34.fixture.test,description,Cobalt Works 34 provides accounting services to local businesses and households in Leeds.,http://c34.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c36.fixture.test,description,Orchid Group 36 provides dental care services to local businesses and households in Portland.,http://c36.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c38.fixture.test,description,Granite Works 38 provides legal services services to local businesses and households in Austin.,http://c38.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c4.fixture.test,description,Delta Studio 4 provides accounting services to local businesses and households in Denver.,http://c4.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c40.fixture.test,description,Harbor Co 40 provides accounting services to local businesses and households in Leeds.,http://c40.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c41.fixture.test,description,Quartz Group 41 provides legal services services to local businesses and households in Madison.,http://c41.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c44.fixture.test,description,Delta Partners 44 provides plumbing services to local businesses and households in Leeds.,http://c44.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c46.fixture.test,description,Ivory Studio 46 provides accounting services to local businesses and households in Madison.,http://c46.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c47.fixture.test,description,Orchid Partners 47 provides plumbing services to local businesses and households in Madison.,http://c47.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c48.fixture.test,description,Pioneer Labs 48 provides legal services services to local businesses and households in Madison.,http://c48.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c5.fixture.test,description,Birch Labs 5 provides web design services to local businesses and households in Madison.,http://c5.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c6.fixture.test,description,Fjord Co 6 provides dental care services to local businesses and households in Portland.,http://c6.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c7.fixture.test,description,Lumen Works 7 provides accounting services to local businesses and households in Leeds.,http://c7.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c8.fixture.test,description,Ivory Labs 8 provides logistics services to local businesses and households in Leeds.,http://c8.fixture.test:46717/,meta,correct,auto-judged against fixture ground truth
+c9.fixture.test,description,Ember Group 9 provides legal services services to local businesses and households in Portland.,http://c9.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c1.fixture.test,email,info@c1.fixture.test,http://c1.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c10.fixture.test,email,info@c10.fixture.test,http://c10.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c11.fixture.test,email,info@c11.fixture.test,http://c11.fixture.test:46717/contact,mailto,correct,auto-judged against fixture ground truth
+c12.fixture.test,email,info@c12.fixture.test,http://c12.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c14.fixture.test,email,info@c14.fixture.test,http://c14.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c19.fixture.test,email,info@c19.fixture.test,http://c19.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c20.fixture.test,email,info@c20.fixture.test,http://c20.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c21.fixture.test,email,info@c21.fixture.test,http://c21.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c23.fixture.test,email,info@c23.fixture.test,http://c23.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c25.fixture.test,email,info@c25.fixture.test,http://c25.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c26.fixture.test,email,info@c26.fixture.test,http://c26.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c28.fixture.test,email,info@c28.fixture.test,http://c28.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c3.fixture.test,email,info@c3.fixture.test,http://c3.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c31.fixture.test,email,info@c31.fixture.test,http://c31.fixture.test:46717/contact,mailto,correct,auto-judged against fixture ground truth
+c33.fixture.test,email,info@c33.fixture.test,http://c33.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c35.fixture.test,email,info@c35.fixture.test,http://c35.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c38.fixture.test,email,info@c38.fixture.test,http://c38.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c39.fixture.test,email,info@c39.fixture.test,http://c39.fixture.test:46717/contact,mailto,correct,auto-judged against fixture ground truth
+c40.fixture.test,email,info@c40.fixture.test,http://c40.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c42.fixture.test,email,info@c42.fixture.test,http://c42.fixture.test:46717/contact,mailto,correct,auto-judged against fixture ground truth
+c43.fixture.test,email,info@c43.fixture.test,http://c43.fixture.test:46717/contact,mailto,correct,auto-judged against fixture ground truth
+c44.fixture.test,email,info@c44.fixture.test,http://c44.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c45.fixture.test,email,info@c45.fixture.test,http://c45.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c46.fixture.test,email,info@c46.fixture.test,http://c46.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c47.fixture.test,email,info@c47.fixture.test,http://c47.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c49.fixture.test,email,info@c49.fixture.test,http://c49.fixture.test:46717/contact,mailto,correct,auto-judged against fixture ground truth
+c5.fixture.test,email,info@c5.fixture.test,http://c5.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c6.fixture.test,email,info@c6.fixture.test,http://c6.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c8.fixture.test,email,info@c8.fixture.test,http://c8.fixture.test:46717/,mailto,correct,auto-judged against fixture ground truth
+c9.fixture.test,email,info@c9.fixture.test,http://c9.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c0.fixture.test,linkedin_url,https://www.linkedin.com/company/c0-co,http://c0.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c1.fixture.test,linkedin_url,https://www.linkedin.com/company/c1-co,http://c1.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c10.fixture.test,linkedin_url,https://www.linkedin.com/company/c10-co,http://c10.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c14.fixture.test,linkedin_url,https://www.linkedin.com/company/c14-co,http://c14.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c16.fixture.test,linkedin_url,https://www.linkedin.com/company/c16-co,http://c16.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c18.fixture.test,linkedin_url,https://www.linkedin.com/company/c18-co,http://c18.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c22.fixture.test,linkedin_url,https://www.linkedin.com/company/c22-co,http://c22.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c25.fixture.test,linkedin_url,https://www.linkedin.com/company/c25-co,http://c25.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c28.fixture.test,linkedin_url,https://www.linkedin.com/company/c28-co,http://c28.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c3.fixture.test,linkedin_url,https://www.linkedin.com/company/c3-co,http://c3.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c34.fixture.test,linkedin_url,https://www.linkedin.com/company/c34-co,http://c34.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c38.fixture.test,linkedin_url,https://www.linkedin.com/company/c38-co,http://c38.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c40.fixture.test,linkedin_url,https://www.linkedin.com/company/c40-co,http://c40.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c41.fixture.test,linkedin_url,https://www.linkedin.com/company/c41-co,http://c41.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c47.fixture.test,linkedin_url,https://www.linkedin.com/company/c47-co,http://c47.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c48.fixture.test,linkedin_url,https://www.linkedin.com/company/c48-co,http://c48.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c6.fixture.test,linkedin_url,https://www.linkedin.com/company/c6-co,http://c6.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c7.fixture.test,linkedin_url,https://www.linkedin.com/company/c7-co,http://c7.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c9.fixture.test,linkedin_url,https://www.linkedin.com/company/c9-co,http://c9.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c0.fixture.test,phone,+1 555-495-1291,http://c0.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c11.fixture.test,phone,+1 555-143-3335,http://c11.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c12.fixture.test,phone,+1 555-156-7387,http://c12.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c14.fixture.test,phone,+1 555-838-8092,http://c14.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c19.fixture.test,phone,+1 555-724-2217,http://c19.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c22.fixture.test,phone,+1 555-940-2582,http://c22.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c23.fixture.test,phone,+1 555-545-5418,http://c23.fixture.test:46717/,tel,correct,auto-judged against fixture ground truth
+c25.fixture.test,phone,+1 555-743-1390,http://c25.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c26.fixture.test,phone,+1 555-428-4025,http://c26.fixture.test:46717/,tel,correct,auto-judged against fixture ground truth
+c29.fixture.test,phone,+1 555-424-7223,http://c29.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c3.fixture.test,phone,+1 555-846-8227,http://c3.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c30.fixture.test,phone,+1 555-906-5792,http://c30.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c31.fixture.test,phone,+1 555-314-4994,http://c31.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c32.fixture.test,phone,+1 555-341-7635,http://c32.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c33.fixture.test,phone,+1 555-878-9641,http://c33.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c36.fixture.test,phone,+1 555-695-4843,http://c36.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c38.fixture.test,phone,+1 555-732-3675,http://c38.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c39.fixture.test,phone,+1 555-989-1320,http://c39.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c4.fixture.test,phone,+1 555-821-7850,http://c4.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c40.fixture.test,phone,+1 555-468-1615,http://c40.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c41.fixture.test,phone,+1 555-764-3898,http://c41.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c42.fixture.test,phone,+1 555-265-5298,http://c42.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c43.fixture.test,phone,+1 555-977-8133,http://c43.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c45.fixture.test,phone,+1 555-525-3804,http://c45.fixture.test:46717/,tel,correct,auto-judged against fixture ground truth
+c47.fixture.test,phone,+1 555-240-8363,http://c47.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c48.fixture.test,phone,+1 555-560-3686,http://c48.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
+c49.fixture.test,phone,+1 555-213-8327,http://c49.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c5.fixture.test,phone,+1 555-695-8116,http://c5.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c8.fixture.test,phone,+1 555-839-1391,http://c8.fixture.test:46717/contact,tel,correct,auto-judged against fixture ground truth
+c9.fixture.test,phone,+1 555-973-9303,http://c9.fixture.test:46717/,json_ld,correct,auto-judged against fixture ground truth
