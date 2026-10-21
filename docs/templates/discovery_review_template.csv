@@ -1,0 +1,4 @@
+domain,field,verdict,corrected_value,reviewed_by,notes
+your-candidate.example,email,correct,,Your Name,checked on the contact page
+your-candidate.example,phone,corrected,+91 98765 43210,Your Name,number on the footer differs
+your-candidate.example,company_name,incorrect,,Your Name,that is a tagline not the name

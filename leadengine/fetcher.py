@@ -6,6 +6,7 @@ so SSRF checks, size limits, per-domain politeness, caching and accounting live 
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import email.utils
 import hashlib
 import random
@@ -29,6 +30,9 @@ from .db import Database
 from .security import BlockedDestination, Resolver, build_http_client, sanitize_for_log, validate_url
 
 HTML_TYPES = ("text/html", "application/xhtml+xml")
+# Extra response types a caller explicitly opts into for ONE fetch (e.g. discovery reading an open-data JSON API). Everything else
+# in the guarded path (SSRF checks, robots, size caps, challenge detection, audit) is identical. Task-local, so it never leaks.
+_EXTRA_TYPES: contextvars.ContextVar[tuple] = contextvars.ContextVar("fetch_extra_types", default=())
 RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
 # Strong, page-level anti-bot interstitial phrases only. A reCAPTCHA widget on a normal contact form is NOT a challenge.
 CHALLENGE_MARKERS = ("just a moment...", "/cdn-cgi/challenge-platform", "attention required! | cloudflare",
@@ -211,8 +215,16 @@ class Fetcher:
 
     # ---------- public ----------
     async def fetch(self, url: str, run: Optional[RunMetrics] = None, budget: Optional[Budget] = None,
-                    *, use_robots: bool = True, ttl_override: Optional[int] = None) -> FetchResult:
-        """Fetch one page. Concurrent calls for the same URL share one network fetch."""
+                    *, use_robots: bool = True, ttl_override: Optional[int] = None,
+                    accept_types: tuple = ()) -> FetchResult:
+        """Fetch one page. Concurrent calls for the same URL share one network fetch.
+        `accept_types`: additional exact content-types to accept for this call (default: HTML and plain text only)."""
+        if accept_types:
+            token = _EXTRA_TYPES.set(tuple(x.lower() for x in accept_types))
+            try:
+                return await self.fetch(url, run, budget, use_robots=use_robots, ttl_override=ttl_override)
+            finally:
+                _EXTRA_TYPES.reset(token)
         key = url
         fut = self._inflight.get(key)
         if fut is not None:
@@ -423,7 +435,7 @@ class Fetcher:
             return FetchResult(url=url, final_url=current, status=status, error_kind="http",
                                error=f"unexpected HTTP {status}")
 
-        if not (ctype in HTML_TYPES or ctype == "text/plain" or ctype == ""):
+        if not (ctype in HTML_TYPES or ctype == "text/plain" or ctype == "" or ctype in _EXTRA_TYPES.get()):
             return FetchResult(url=url, final_url=current, status=status, content_type=ctype,
                                error_kind="content_type", error=f"unsupported content-type {ctype}")
         clen = resp.headers.get("content-length")

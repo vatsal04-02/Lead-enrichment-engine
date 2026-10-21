@@ -339,3 +339,17 @@ async def test_jobs_run_end_to_end_with_the_model_backend_and_report_model_usage
         assert "tier_scrapegraph" in m["tiers"] or m["per_company"]["ai_calls"] > 0
     finally:
         await eng.stop()
+
+
+async def test_ollama_thinking_off_is_sent_to_the_model_server_only_when_requested(fixtures, stub):
+    for mode, expect in (("off", False), ("default", None)):
+        stub.requests.clear() if hasattr(stub.requests, "clear") else None
+        eng = await sg_engine(fixtures, stub, scrapegraph_ollama_thinking=mode)
+        try:
+            s = site_of(fixtures, "plain", 1 if mode == "default" else 0)
+            await eng.enricher.enrich(url_of(fixtures, s), requested=["email"])
+            bodies = [p["body"] for p in stub.posts]
+            assert bodies, "the model must have been called"
+            assert all(b.get("think", None) is expect for b in bodies), (mode, [b.get("think") for b in bodies])
+        finally:
+            await eng.stop()

@@ -74,7 +74,7 @@ class ResolvedConfig:
             raise BackendConfigError("LE_SCRAPEGRAPH_API_KEY_ENV must be the NAME of an environment variable")
         self.python = s.scrapegraph_python or sys.executable
         self.allowed = [f"{host}:{port}"]
-        self.fingerprint = hashlib.sha256(f"{prov}|{model}|{self.base_url}|{PROMPT_VERSION}|{s.scrapegraph_max_input_chars}".encode()).hexdigest()[:16]
+        self.fingerprint = hashlib.sha256(f"{prov}|{model}|{self.base_url}|{s.scrapegraph_ollama_thinking}|{PROMPT_VERSION}|{s.scrapegraph_max_input_chars}".encode()).hexdigest()[:16]
 
     def describe(self) -> dict:
         return {"backend": "scrapegraph", "provider": self.provider, "model": self.model, "endpoint_host": self.host,
@@ -110,7 +110,8 @@ class _Worker:
         threading.Thread(target=self._pump_stdout, daemon=True).start()
         threading.Thread(target=self._pump_stderr, daemon=True).start()
         boot = {"allowed": self.cfg.allowed, "model": {"provider": self.cfg.provider, "model": self.cfg.model,
-                                                       "base_url": self.cfg.base_url, "api_key_env": self.cfg.key_env}}
+                                                       "base_url": self.cfg.base_url, "api_key_env": self.cfg.key_env,
+                                                       "thinking": self.s.scrapegraph_ollama_thinking}}
         self._write(boot)
         ready = self._read(30.0, "worker start-up")
         if not ready.get("ready"):

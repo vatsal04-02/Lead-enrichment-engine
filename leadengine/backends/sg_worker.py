@@ -183,8 +183,9 @@ def build_model(cfg: dict, guard):
     timeout = float(cfg.get("timeout_s", 60))
     if prov == "ollama":
         from langchain_ollama import ChatOllama
+        extra = {"reasoning": False} if cfg.get("thinking") == "off" else {}      # think=false: reasoning models must answer, not deliberate
         return ChatOllama(model=name, base_url=cfg["base_url"], temperature=0, num_predict=int(cfg["max_output_tokens"]),
-                          format="json", callbacks=[guard], client_kwargs={"timeout": timeout})
+                          format="json", callbacks=[guard], client_kwargs={"timeout": timeout}, **extra)
     if prov == "openai":
         from langchain_openai import ChatOpenAI
         key = os.environ.get(cfg.get("api_key_env") or "OPENAI_API_KEY")
@@ -235,6 +236,7 @@ def make_schema(fields: list[str]):
 
 def do_extract(req: dict, defaults: dict) -> dict:
     cfg = {**defaults, **req.get("model", {})}
+    cfg["thinking"] = defaults.get("thinking")                 # never changeable per request
     if cfg["provider"] != defaults["provider"] or cfg["model"] != defaults["model"]:
         raise _Err("invalid_request", "model/provider cannot be changed per request")
     if str(cfg["model"]).startswith("scrapegraphai/"):

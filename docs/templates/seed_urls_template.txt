@@ -1,0 +1,3 @@
+# One public listing page per line. YOU choose these and read each site's terms of use and robots.txt first.
+# Only the page itself is fetched (links are not followed). Replace the line below with pages you have reviewed:
+# https://a-page-you-reviewed.example/list-of-ai-automation-agencies

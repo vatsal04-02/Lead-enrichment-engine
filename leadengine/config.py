@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     scrapegraph_max_pages_per_company: int = Field(2, ge=1, le=6)
     scrapegraph_max_input_chars: int = Field(12000, ge=1000, le=200000)
     scrapegraph_max_output_tokens: int = Field(512, ge=64, le=8192)
+    scrapegraph_ollama_thinking: str = "default"   # "off" sends think=false (Ollama reasoning models such as qwen3 otherwise spend the output budget on reasoning)
     scrapegraph_model_tokens: int = Field(8192, ge=1024)   # context size handed to the library (chunking)
     scrapegraph_max_worker_response_bytes: int = Field(200_000, ge=1024)
     scrapegraph_request_timeout: float = Field(60.0, gt=0, le=600)
@@ -133,6 +134,8 @@ class Settings(BaseSettings):
         if self.job_heartbeat_seconds * 2 > self.job_lease_seconds:
             raise ValueError("LE_JOB_HEARTBEAT_SECONDS must be at most half of LE_JOB_LEASE_SECONDS "
                              "(a missed heartbeat would let another worker steal live work)")
+        if self.scrapegraph_ollama_thinking not in ("default", "off"):
+            raise ValueError("LE_SCRAPEGRAPH_OLLAMA_THINKING must be 'default' or 'off'")
         if self.extraction_backend not in ("inhouse", "scrapegraph"):
             raise ValueError("LE_EXTRACTION_BACKEND must be 'inhouse' or 'scrapegraph'")
         if self.http_max_keepalive > self.http_max_connections:

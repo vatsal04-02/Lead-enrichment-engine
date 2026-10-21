@@ -103,6 +103,20 @@ Rollback = unset `LE_EXTRACTION_BACKEND`. Install (Windows PowerShell and Linux)
 interpretation and troubleshooting: **[docs/SCRAPEGRAPH_INTEGRATION.md](docs/SCRAPEGRAPH_INTEGRATION.md)**. Benchmarks against fixtures are
 synthetic and say nothing about live-site accuracy.
 
+## FlowHQ discovery & enrichment (find candidates, then enrich them)
+
+`python -m leadengine.discovery` finds candidate companies from sources you choose and have reviewed (manual CSV, public listing pages you name,
+OpenStreetMap open data), validates and de-duplicates them, then enriches with ScrapeGraphAI on a local Ollama model (`qwen3:4b`), falling back to
+the in-house engine and finally to a manual-review record. Every field keeps its source URL, backend and status; output goes to a new
+timestamped directory. **Dry run by default** - a live run needs `--live --confirm-terms-reviewed --confirm-count N`. No paid APIs, no outreach.
+
+```bash
+python -m leadengine.discovery doctor          # is Ollama / qwen3:4b / the library available? (read-only, never downloads)
+python -m leadengine.discovery plan --csv my_candidates.csv --osm --location Pune
+python -m leadengine.discovery run  --csv my_candidates.csv          # dry run: nothing contacted
+```
+Details, commands for Windows and the live run, status and limitations: **[docs/DISCOVERY_ENGINE.md](docs/DISCOVERY_ENGINE.md)**.
+
 ## REST API (`/v1`, optional bearer token `LE_API_TOKEN`)
 
 | route | purpose |
