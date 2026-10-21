@@ -26,7 +26,7 @@ from ..discovery.safety import live_settings
 from ..discovery.urlcheck import check_url
 from ..fetcher import Fetcher
 from ..security import sanitize_for_log
-from .ground import Profile, confidence, ground_profile
+from .ground import HYPOTHESIS_PREFIX, Profile, confidence, confidence_notes, ground_profile
 from .pages import build_document, collect_pages
 from .schema import PROMPT_VERSION, SCHEMA, build_prompt
 
@@ -36,7 +36,7 @@ DEFAULT_MODEL = "qwen3:4b"
 DEFAULT_URL = "http://localhost:11434"
 ENRICH_COLUMNS = ["company_name", "website", "business_description", "products_services", "industry_niche", "target_customers",
                   "pain_points", "ai_automation_opportunities", "outreach_angle", "evidence_urls", "confidence", "model_confidence",
-                  "field_support", "evidence", "pages_used", "pages_failed", "warnings", "status", "error", "backend", "model", "enriched_at"]
+                  "field_support", "support_notes", "evidence", "pages_used", "pages_failed", "warnings", "status", "error", "backend", "model", "enriched_at"]
 OUTPUT_TOKENS = 1400
 MAX_INPUT_CHARS = 12000
 
@@ -85,16 +85,20 @@ def profile_row(p: Profile, pages: list, failures: list, website: str, model: st
     v = p.values
     urls = list(dict.fromkeys(e.url for e in p.evidence))
     status = "ok" if p.supported_extractive else "no_evidence"
+    conf = confidence(p)
+    hyp = lambda x: (HYPOTHESIS_PREFIX + x) if x else ""           # inferred cells are visibly labelled: a hypothesis is not a fact
     return {
         "company_name": v.get("company_name", ""), "website": website, "business_description": v.get("business_description", ""),
         "products_services": "; ".join(v.get("products_services", [])), "industry_niche": v.get("industry_niche", ""),
-        "target_customers": v.get("target_customers", ""), "pain_points": "; ".join(v.get("pain_points", [])),
-        "ai_automation_opportunities": "; ".join(v.get("ai_automation_opportunities", [])), "outreach_angle": v.get("outreach_angle", ""),
-        "evidence_urls": " | ".join(urls), "confidence": confidence(p, len(pages)), "model_confidence": p.model_confidence,
+        "target_customers": v.get("target_customers", ""), "pain_points": hyp("; ".join(v.get("pain_points", []))),
+        "ai_automation_opportunities": hyp("; ".join(v.get("ai_automation_opportunities", []))), "outreach_angle": hyp(v.get("outreach_angle", "")),
+        "evidence_urls": " | ".join(urls), "confidence": conf, "model_confidence": p.model_confidence,
         "field_support": json.dumps(p.support, separators=(",", ":")),
-        "evidence": json.dumps([{"field": e.field, "url": e.url, "quote": e.quote} for e in p.evidence][:40], ensure_ascii=False),
+        "support_notes": json.dumps(p.reasons, ensure_ascii=False) if p.reasons else "",
+        "evidence": json.dumps([{"field": e.field, "url": e.url, "quote": e.quote, "overlap": e.overlap} for e in p.evidence][:40], ensure_ascii=False),
         "pages_used": " | ".join(f"{pg.url} ({pg.kind})" for pg in pages),
-        "pages_failed": " | ".join(f"{f['url']} [{f['error_kind']}]" for f in failures), "warnings": " | ".join(warnings), "status": status,
+        "pages_failed": " | ".join(f"{f['url']} [{f['error_kind']}]" for f in failures),
+        "warnings": " | ".join([*warnings, *confidence_notes(p, conf)]), "status": status,
         "error": "" if status == "ok" else "the model's statements could not be tied to text on the pages",
         "backend": "scrapegraph", "model": model, "enriched_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
 
@@ -259,5 +263,5 @@ async def _process(job: Job, fetcher, backend, base: Settings, cfg: ProfileConfi
     if not isinstance(values, dict):
         return _blank_row("failed", f"{out.error_kind or 'model_error'}: {out.error or 'no usable answer from the model'}"[:300], job.ident.start_url) | {
             "pages_used": " | ".join(f"{p.url} ({p.kind})" for p in ps.pages), "warnings": " | ".join(warnings)}
-    prof = ground_profile(values, texts)
+    prof = ground_profile(values, texts, {pg.url: pg.kind for pg in ps.pages})
     return profile_row(prof, ps.pages, ps.failures, job.ident.start_url, cfg.model, out.usage, warnings)

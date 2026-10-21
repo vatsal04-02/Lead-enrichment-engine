@@ -38,9 +38,12 @@ async def test_qwen3_profile_run_through_the_real_worker_sends_the_right_request
             posts = [p["body"] for p in stub.posts]
             paths = {(r["method"], r["path"].split("?")[0]) for r in stub.requests}
     r = read_out(res["output"])[0]
-    assert r["status"] == "ok" and r["company_name"] == "Lucknow Flow Works" and r["confidence"] == "high" and r["backend"] == "scrapegraph"
+    assert r["status"] == "ok" and r["company_name"] == "Lucknow Flow Works" and r["backend"] == "scrapegraph"
+    assert r["confidence"] == "medium" and "evidence alone would support 'high'" in r["warnings"], "the stub rates itself 'medium': confidence may be capped by it, never raised"
     assert r["products_services"] == "WhatsApp order automation; Workflow design; CRM integration"
-    assert json.loads(r["field_support"])["ai_automation_opportunities"] == "inferred" and r["pain_points"]
+    fs = json.loads(r["field_support"])
+    assert fs["ai_automation_opportunities"] == "inferred" and r["ai_automation_opportunities"].startswith("[hypothesis] ")
+    assert fs["pain_points"] == "unsupported" and r["pain_points"] == "", "product marketing copy is not evidence of the company's own problem"
     assert len(r["evidence_urls"].split(" | ")) >= 3 and r["pages_used"].count("(") == 4
     assert len(posts) == 1, "one model call per company"
     b = posts[0]

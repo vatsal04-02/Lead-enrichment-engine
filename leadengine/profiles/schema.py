@@ -1,7 +1,7 @@
 """The profile schema sent to the local model and the prompt that goes with it."""
 from __future__ import annotations
 
-PROMPT_VERSION = "profile-1"
+PROMPT_VERSION = "profile-2"
 
 # field -> "str" | "list". Flat on purpose: a small local model follows flat JSON far more reliably than nested objects.
 SCHEMA: dict[str, str] = {
@@ -24,14 +24,14 @@ FIELD_HELP = {
     "products_quote": "ONE passage copied exactly from a page that lists those products or services",
     "industry_niche": "the industry or niche the company operates in, in a few words",
     "industry_quote": "ONE passage copied exactly from a page that supports industry_niche",
-    "target_customers": "who the company says its customers are",
-    "customers_quote": "ONE passage copied exactly from a page that supports target_customers",
-    "pain_points": "up to 3 business problems this company's customers or this company itself plausibly face (your hypotheses)",
-    "pain_points_basis": "passages copied exactly from the pages that justify those pain points",
-    "ai_automation_opportunities": "up to 3 specific workflows where AI or business-process automation could help this company (your hypotheses)",
-    "opportunities_basis": "passages copied exactly from the pages that justify those opportunities",
-    "outreach_angle": "one sentence: a respectful, specific reason to start a conversation, grounded in the pages",
-    "outreach_basis": "ONE passage copied exactly from a page that the outreach angle builds on",
+    "target_customers": "who the company says its customers are - only if a page names them; otherwise null",
+    "customers_quote": "ONE passage copied exactly from a page that NAMES those customers (a tagline about the product does not count)",
+    "pain_points": "LEAVE EMPTY unless a page states how THIS company itself operates (e.g. 'we handle', 'we manage', 'our team of 12'); never a problem of its customers or of the market",
+    "pain_points_basis": "passages copied exactly in which the company describes its OWN operations",
+    "ai_automation_opportunities": "up to 3 workflows THIS company itself runs where AI or process automation could help, phrased as 'could ...' (hypotheses, not claims of a problem)",
+    "opportunities_basis": "passages copied exactly that show the company runs those workflows",
+    "outreach_angle": "one sentence: a respectful conversation starter that mentions ONE specific fact from the pages; never assume a problem or a need",
+    "outreach_basis": "ONE passage copied exactly with that specific fact (not a general tagline)",
     "model_confidence": "high, medium or low: how well the pages support your answers overall",
 }
 
@@ -47,7 +47,10 @@ def build_prompt() -> str:
         "2. Every *_quote and *_basis value must be copied EXACTLY, character for character, from a page (under 200 characters each). "
         "Never paraphrase a quote.\n"
         "3. products_services: names exactly as the pages write them.\n"
-        "4. pain_points, ai_automation_opportunities and outreach_angle are your hypotheses as a business-process-automation consultant; "
-        "each must be justified by passages copied exactly into its *_basis field. If you cannot cite a passage, leave it empty.\n"
-        "5. Be brief. No marketing language, no invented numbers, clients, names or claims.\n"
+        "4. Each *_quote must itself CONTAIN the words of the claim it supports. A general tagline or slogan does not support a claim about customers, "
+        "industry or products.\n"
+        "5. pain_points, ai_automation_opportunities and outreach_angle are unverified HYPOTHESES. Never infer that this company has a problem because its "
+        "pages describe a problem of customers, teams or the market in general, or because the text addresses the reader as 'you'. "
+        "If the pages do not describe this company's OWN operations, leave pain_points empty. Each hypothesis needs its own *_basis passage copied exactly.\n"
+        "6. Be brief. No marketing language, no invented numbers, clients, names or claims.\n"
         f"Fields:\n{lines}\n")

@@ -12,7 +12,7 @@ import pytest
 from leadengine.backends import BackendUnavailable
 from leadengine.backends.base import PageOutcome, Usage
 from leadengine.profiles import cli as profile_cli
-from leadengine.profiles.ground import (MIN_QUOTE, as_list, confidence, find_quote, ground_profile, is_missing, norm)
+from leadengine.profiles.ground import (HYPOTHESIS_PREFIX, MIN_QUOTE, as_list, confidence, confidence_notes, find_quote, ground_profile, is_missing, norm)
 from leadengine.profiles.pages import build_document, collect_pages, sanitize_html
 from leadengine.profiles.runner import (ENRICH_COLUMNS, ProfileConfig, ProfileError, output_columns, plan_jobs, run_profiles)
 from leadengine.profiles.schema import SCHEMA, build_prompt
@@ -21,7 +21,7 @@ from leadengine.domain import normalize
 from leadengine.fetcher import Fetcher
 from tests.conftest import make_settings
 from tests.netguard import clean_le_env, netguard, no_network  # noqa: F401
-from tests.profile_sites import GOOD, INJECTION, handler_for
+from tests.profile_sites import GENERIC, GOOD, INJECTION, handler_for
 from tests.rawserver import serve
 
 GOOD_ANSWER = {
@@ -33,7 +33,7 @@ GOOD_ANSWER = {
     "target_customers": "D2C brands and neighbourhood retail chains", "customers_quote": "We work with D2C brands and neighbourhood retail chains",
     "pain_points": ["Repetitive order follow-ups"], "pain_points_basis": ["We automate repetitive order follow-ups and customer replies"],
     "ai_automation_opportunities": ["Automate order follow-up messages"], "opportunities_basis": ["repetitive order follow-ups and customer replies"],
-    "outreach_angle": "Offer a short review of which order follow-ups could be automated.", "outreach_basis": "customer replies so small teams can grow",
+    "outreach_angle": "Mention customer replies for small teams.", "outreach_basis": "customer replies so small teams can grow without hiring more staff",
     "model_confidence": "high"}
 
 
@@ -131,14 +131,123 @@ def test_a_lone_common_word_on_the_page_is_not_support_for_a_made_up_claim():
     assert p.support["industry_niche"] == "unsupported" and p.support["company_name"] == "unsupported" and p.values == {}
 
 
+OPS_PAGES = {"https://a.in/": norm("Acme Flow builds WhatsApp automation for retail chains. We handle all customer replies manually through a shared inbox "
+                                  "and our team of 12 agents processes about 300 orders every day. Automate order follow-up messages with workflow design.")}
+
+
 def test_hypotheses_need_a_verifiable_basis_are_labelled_inferred_and_unsupported_ones_are_dropped():
-    raw = {"pain_points": ["Manual follow-ups"], "pain_points_basis": ["We serve D2C brands.", "invented basis that is not on any page at all"],
+    raw = {"pain_points": ["Customer replies are handled manually"], "pain_points_basis": ["We handle all customer replies manually through a shared inbox", "invented basis that is not on any page at all"],
            "ai_automation_opportunities": ["Bots"], "opportunities_basis": ["invented basis that is not on any page at all"],
            "outreach_angle": "Say hi", "outreach_basis": ""}
-    p = ground_profile(raw, PAGES)
-    assert p.support["pain_points"] == "inferred" and p.values["pain_points"] == ["Manual follow-ups"]
+    p = ground_profile(raw, OPS_PAGES)
+    assert p.support["pain_points"] == "inferred" and p.values["pain_points"] == ["Customer replies are handled manually"]
     assert p.support["ai_automation_opportunities"] == "unsupported" and p.support["outreach_angle"] == "unsupported"
-    assert [e.quote for e in p.evidence if e.field == "pain_points"] == ["We serve D2C brands."], "only the verified basis is kept as evidence"
+    assert [e.quote for e in p.evidence if e.field == "pain_points"] == ["We handle all customer replies manually through a shared inbox"], "only the verified basis is kept as evidence"
+    assert p.reasons["ai_automation_opportunities"] == "basis_not_found_on_pages" and p.reasons["outreach_angle"] == "no_basis_given"
+
+
+# ---- generic / irrelevant evidence (the Postman-style failure: a real quote that says nothing about THIS claim)
+POSTMAN_LIKE = {"https://x.example/": norm(
+    "Acme API Platform is the world's leading API platform. Build, test and ship APIs faster. Pricing Docs Enterprise Sign up for free. "
+    "Teams struggle with fragmented tooling and slow delivery, wasting hours every week. Get started with a free account today. "
+    "Our platform lets you design, mock and document every API in one place.")}
+
+
+def test_a_generic_tagline_does_not_support_a_customer_or_industry_claim():
+    raw = {"company_name": "Acme API Platform", "business_description": "API platform used to design, mock and document APIs.",
+           "description_quote": "Our platform lets you design, mock and document every API in one place",
+           "target_customers": "Developers and enterprise teams", "customers_quote": "Acme API Platform is the world's leading API platform",
+           "industry_niche": "Healthcare logistics", "industry_quote": "Build, test and ship APIs faster"}
+    p = ground_profile(raw, POSTMAN_LIKE)
+    assert p.support["business_description"] == "supported"
+    assert p.support["target_customers"] == "unsupported" and "target_customers" not in p.values
+    assert p.reasons["target_customers"] in ("too_generic_quote",) or p.reasons["target_customers"].startswith("quote_does_not_support_claim")
+    assert p.support["industry_niche"] == "unsupported" and p.reasons["industry_niche"].startswith("quote_does_not_support_claim")
+
+
+def test_boilerplate_and_call_to_action_text_is_never_evidence():
+    for q in ("Get started with a free account today", "Sign up for free. Request a demo. Contact sales"):
+        p = ground_profile({"target_customers": "free accounts and demos", "customers_quote": q}, {"u": norm(q + " and more words here")})
+        assert p.support["target_customers"] == "unsupported" and p.reasons["target_customers"] == "boilerplate_quote", q
+
+
+def test_a_quote_must_contain_the_terms_of_the_claim_it_supports():
+    pages = {"u": norm("Lucknow Flow Works builds WhatsApp and workflow automation for growing retail businesses.")}
+    ok = ground_profile({"business_description": "Builds WhatsApp and workflow automation for retail businesses",
+                         "description_quote": "builds WhatsApp and workflow automation for growing retail businesses"}, pages)
+    assert ok.support["business_description"] == "supported" and ok.evidence[0].overlap >= 0.5
+    off = ground_profile({"business_description": "Provides banking software for insurance carriers in Europe",
+                          "description_quote": "builds WhatsApp and workflow automation for growing retail businesses"}, pages)
+    assert off.support["business_description"] == "unsupported" and "does_not_support_claim" in off.reasons["business_description"]
+    wrong_number = ground_profile({"business_description": "Serves 500 retail businesses with WhatsApp automation",
+                                   "description_quote": "builds WhatsApp and workflow automation for growing retail businesses"}, pages)
+    assert wrong_number.support["business_description"] == "unsupported", "a number in the claim that the quote does not contain is never supported"
+
+
+def test_menu_labels_and_the_company_name_are_not_products_and_lone_words_need_a_services_page():
+    pages = {"https://x/": norm("Acme API Platform. Pricing Docs Enterprise Blog. Mock servers. Monitoring. API design studio for teams."),
+             "https://x/services": norm("Our services Monitoring Consulting Pricing Docs")}
+    kinds = {"https://x/": "home", "https://x/services": "services"}
+    raw = {"company_name": "Acme API Platform", "products_services": ["Pricing", "Docs", "Enterprise", "Acme API Platform", "Mock servers", "Monitoring", "Blog", "Consulting"]}
+    p = ground_profile(raw, pages, kinds)
+    assert p.values["products_services"] == ["Mock servers", "Monitoring", "Consulting"]       # multi-word, or a lone word on the services page
+    assert "Pricing" not in p.values["products_services"] and p.reasons["products_services"].startswith("5 item(s) dropped")
+    home_only = ground_profile({"company_name": "Acme API Platform", "products_services": ["Monitoring", "Pricing"]}, {"https://x/": pages["https://x/"]}, {"https://x/": "home"})
+    assert home_only.support["products_services"] == "unsupported", "a lone word on the home page with no quote is not a product"
+
+
+# ---- hypotheses: never a fact, never derived from market problems or from copy addressed to the visitor
+def test_a_general_industry_problem_is_not_a_pain_point_of_the_company():
+    for basis in ("Teams struggle with fragmented tooling and slow delivery, wasting hours every week",
+                  "Many organizations face bottlenecks when shipping software across silos"):
+        raw = {"pain_points": ["Fragmented tooling slows delivery"], "pain_points_basis": [basis]}
+        p = ground_profile(raw, {"u": norm(basis + ". Plus filler words for length")})
+        assert p.support["pain_points"] == "unsupported" and p.reasons["pain_points"] == "basis_describes_a_general_market_problem" and "pain_points" not in p.values
+
+
+def test_copy_addressed_to_the_visitor_and_product_benefits_are_not_pain_point_evidence():
+    pages = {"u": norm("Our platform lets you design, mock and document every API in one place. We automate repetitive order follow-ups for retail teams. "
+                       "We handle returns manually and our team of 9 agents answers every ticket.")}
+    visitor = ground_profile({"pain_points": ["Documenting APIs is hard"], "pain_points_basis": ["Our platform lets you design, mock and document every API in one place"]}, pages)
+    assert visitor.support["pain_points"] == "unsupported" and visitor.reasons["pain_points"] == "basis_is_addressed_to_visitors"
+    benefit = ground_profile({"pain_points": ["Repetitive order follow-ups"], "pain_points_basis": ["We automate repetitive order follow-ups for retail teams"]}, pages)
+    assert benefit.support["pain_points"] == "unsupported" and benefit.reasons["pain_points"] == "basis_is_not_a_statement_about_the_companys_own_operations"
+    own = ground_profile({"pain_points": ["Returns are handled manually"], "pain_points_basis": ["We handle returns manually and our team of 9 agents answers every ticket"]}, pages)
+    assert own.support["pain_points"] == "inferred" and own.values["pain_points"] == ["Returns are handled manually"]
+
+
+def test_a_pain_point_that_only_restates_a_generic_claim_is_dropped_even_with_an_own_operations_basis():
+    p = ground_profile({"pain_points": ["Teams often struggle with manual work"], "pain_points_basis": ["We handle all customer replies manually through a shared inbox"]}, OPS_PAGES)
+    assert p.support["pain_points"] == "unsupported" and "pain_points" not in p.values
+
+
+def test_a_hypothesis_must_actually_follow_from_its_basis():
+    p = ground_profile({"ai_automation_opportunities": ["Predict churn with machine learning"],
+                        "opportunities_basis": ["Automate order follow-up messages with workflow design"]}, OPS_PAGES)
+    assert p.support["ai_automation_opportunities"] == "unsupported" and p.reasons["ai_automation_opportunities"].startswith("dropped: not supported by its basis")
+    good = ground_profile({"ai_automation_opportunities": ["Could automate order follow-up messages"],
+                           "opportunities_basis": ["Automate order follow-up messages with workflow design"]}, OPS_PAGES)
+    assert good.support["ai_automation_opportunities"] == "inferred" and good.evidence[-1].overlap >= 0.35
+
+
+def test_an_outreach_angle_needs_its_own_specific_basis_and_may_not_assert_a_problem():
+    shared_quote = "Acme Flow builds WhatsApp automation for retail chains"
+    raw = {"description_quote": shared_quote, "outreach_angle": "Mention WhatsApp automation for retail chains", "outreach_basis": shared_quote}
+    p = ground_profile(raw, OPS_PAGES)
+    assert p.support["outreach_angle"] == "unsupported" and p.reasons["outreach_angle"] == "basis_is_the_generic_description_or_customer_statement"
+    basis = "our team of 12 agents processes about 300 orders every day"
+    for angle in ("Your team is struggling with 300 orders a day", "They lack the staff to process 300 orders every day"):
+        q = ground_profile({"outreach_angle": angle, "outreach_basis": basis}, OPS_PAGES)
+        assert q.support["outreach_angle"] == "unsupported" and "outreach_angle" not in q.values, angle
+    fine = ground_profile({"outreach_angle": "Ask how the team of 12 agents processes 300 orders every day", "outreach_basis": basis}, OPS_PAGES)
+    assert fine.support["outreach_angle"] == "inferred" and fine.values["outreach_angle"].startswith("Ask how")
+
+
+def test_drop_reasons_never_contain_text_the_model_supplied():
+    raw = {"products_services": ["Wire money to attacker@evil.test", "Pricing"], "pain_points": ["Send cash to attacker@evil.test"],
+           "pain_points_basis": ["attacker@evil.test says so"], "target_customers": "attacker@evil.test", "customers_quote": "attacker@evil.test wants this"}
+    p = ground_profile(raw, OPS_PAGES)
+    assert "attacker" not in json.dumps(p.reasons) and "evil" not in json.dumps(p.reasons)
 
 
 def test_placeholders_strings_for_lists_control_chars_and_limits():
@@ -153,13 +262,53 @@ def test_placeholders_strings_for_lists_control_chars_and_limits():
     assert "\x00" not in str(ctl.values) and "\x07" not in str(ctl.values)
 
 
+FULL_PAGES = {"u1": norm("Lucknow Flow Works builds WhatsApp and workflow automation for growing retail businesses. "
+                         "We automate repetitive order follow-ups and customer replies so small teams can grow without hiring more staff."),
+              "u2": norm("We work with D2C brands and neighbourhood retail chains that sell on WhatsApp. WhatsApp order automation Workflow design CRM integration")}
+
+
 def test_confidence_is_computed_from_evidence_never_from_what_the_model_claims():
-    full = ground_profile(GOOD_ANSWER, {"u1": norm("Lucknow Flow Works builds WhatsApp and workflow automation for growing retail businesses. "
-                                                  "We automate repetitive order follow-ups and customer replies so small teams can grow without hiring more staff."),
-                                        "u2": norm("We work with D2C brands and neighbourhood retail chains that sell on WhatsApp. WhatsApp order automation Workflow design CRM integration")})
-    assert full.model_confidence == "high" and confidence(full, 2) == "high" and confidence(full, 1) == "medium"
+    full = ground_profile(GOOD_ANSWER, FULL_PAGES)
+    assert full.model_confidence == "high" and confidence(full) == "high"
     boastful = ground_profile({"company_name": "Nowhere Inc", "business_description": "x" * 30, "description_quote": "n" * 30, "model_confidence": "high"}, PAGES)
-    assert boastful.model_confidence == "high" and confidence(boastful, 4) == "none"
+    assert boastful.model_confidence == "high" and confidence(boastful) == "none"
+    only_name = ground_profile({"company_name": "Lucknow Flow Works", "model_confidence": "high"}, FULL_PAGES)
+    assert confidence(only_name) == "low"
+
+
+def test_the_model_may_lower_confidence_but_never_raise_it_and_the_disagreement_is_reported():
+    for mc, expect in (("high", "high"), ("", "high"), ("medium", "medium"), ("low", "medium")):
+        p = ground_profile({**GOOD_ANSWER, "model_confidence": mc}, FULL_PAGES)
+        assert confidence(p) == expect, mc
+    p = ground_profile({**GOOD_ANSWER, "model_confidence": "medium"}, FULL_PAGES)
+    notes = confidence_notes(p, confidence(p))
+    assert any("evidence alone would support 'high'" in n and "'medium'" in n for n in notes), notes
+    weak = ground_profile({"company_name": "Lucknow Flow Works", "business_description": GOOD_ANSWER["business_description"],
+                           "description_quote": GOOD_ANSWER["description_quote"], "model_confidence": "high"}, FULL_PAGES)
+    assert confidence(weak) == "low", "a model that says 'high' cannot lift thin evidence"
+
+
+def test_populated_fields_alone_do_not_make_high_confidence():
+    one_page = {"u1": FULL_PAGES["u1"] + " " + FULL_PAGES["u2"]}
+    p = ground_profile(GOOD_ANSWER, one_page)
+    assert p.support["target_customers"] == p.support["products_services"] == "supported" and confidence(p) == "medium", "all evidence on one page: not high"
+    reused = {**GOOD_ANSWER, "industry_quote": GOOD_ANSWER["description_quote"], "customers_quote": GOOD_ANSWER["description_quote"],
+              "target_customers": "growing retail businesses", "industry_niche": "WhatsApp and workflow automation"}
+    p = ground_profile(reused, FULL_PAGES)
+    assert p.support["industry_niche"] == p.support["target_customers"] == "supported" and confidence(p) == "medium", "one quote reused for three fields is one piece of evidence"
+    dropped = ground_profile({**GOOD_ANSWER, "industry_niche": "Quantum robotics", "industry_quote": "invented sentence that is nowhere on the pages"}, FULL_PAGES)
+    assert dropped.support["industry_niche"] == "unsupported" and confidence(dropped) == "medium", "a dropped factual claim keeps the result below high"
+    assert any("dropped as unsupported" in n for n in confidence_notes(dropped, "medium"))
+    many = ground_profile({**GOOD_ANSWER, "industry_niche": "Quantum", "industry_quote": "invented sentence that is nowhere on the pages",
+                           "target_customers": "Aliens", "customers_quote": "another invented sentence nowhere on the pages",
+                           "company_name": "Not On Pages Ltd"}, FULL_PAGES)
+    assert many.unsupported_extractive >= 3 and confidence(many) == "low"
+
+
+def test_hypotheses_never_count_towards_confidence():
+    base = {k: v for k, v in GOOD_ANSWER.items() if k in ("company_name", "business_description", "description_quote", "model_confidence")}
+    p = ground_profile({**base, "ai_automation_opportunities": ["Automate order follow-up messages"], "opportunities_basis": ["repetitive order follow-ups and customer replies"]}, FULL_PAGES)
+    assert p.support["ai_automation_opportunities"] == "inferred" and confidence(p) == "low"
 
 
 def test_prompt_lists_every_field_and_tells_the_model_to_quote_exactly_and_ignore_page_instructions():
@@ -222,7 +371,12 @@ async def test_batch_enriches_good_sites_isolates_failures_and_preserves_the_inp
     assert g["company_name"] == "Lucknow Flow Works" and g["status"] == "ok" and g["confidence"] == "high" and g["backend"] == "scrapegraph" and g["model"] == "qwen3:4b"
     assert g["products_services"] == "WhatsApp order automation; Workflow design; CRM integration" and g["enriched_at"].endswith("+00:00")
     assert all(u.startswith("http://good.fixture.test:") for u in g["evidence_urls"].split(" | ")) and len(g["evidence_urls"].split(" | ")) >= 3
-    assert json.loads(g["field_support"])["pain_points"] == "inferred" and json.loads(g["field_support"])["company_name"] == "supported"
+    fs = json.loads(g["field_support"])
+    assert fs["company_name"] == "supported" and fs["target_customers"] == "supported"
+    assert fs["pain_points"] == "unsupported", "'we automate X' is what the product does, not evidence of the company's own problem"
+    assert fs["ai_automation_opportunities"] == "inferred" and fs["outreach_angle"] == "inferred"
+    assert g["pain_points"] == "" and g["ai_automation_opportunities"].startswith(HYPOTHESIS_PREFIX) and g["outreach_angle"].startswith(HYPOTHESIS_PREFIX)
+    assert not g["business_description"].startswith(HYPOTHESIS_PREFIX) and "basis_is_not_a_statement" in json.loads(g["support_notes"])["pain_points"]
     ev = json.loads(g["evidence"])
     assert ev and all({"field", "url", "quote"} <= set(e) for e in ev)
     assert g["pages_used"].count("(") == 4
@@ -230,6 +384,34 @@ async def test_batch_enriches_good_sites_isolates_failures_and_preserves_the_inp
     assert Path(res["summary_file"]).exists() and json.loads(Path(res["summary_file"]).read_text())["model_usage"]["calls"] == 2
     text = caplog.text
     assert "[1/4]" in text and "good.fixture.test: ok" in text and "failed" in text and "robots" in text and "row 4 skipped" in text
+
+
+async def test_an_overreaching_answer_about_a_generic_marketing_site_keeps_only_what_the_pages_support(tmp_path):
+    overreach = {"company_name": "Acme API Platform", "business_description": "The world's leading API platform used by millions of developers.",
+                 "description_quote": "Acme API Platform is the world's leading API platform",
+                 "products_services": ["Pricing", "Docs", "Enterprise", "API design studio", "Mock servers"],
+                 "industry_niche": "Financial technology", "industry_quote": "The world's leading API platform for building and using APIs",
+                 "target_customers": "Developers and large enterprise teams", "customers_quote": "Acme API Platform helps teams collaborate on APIs",
+                 "pain_points": ["Fragmented tooling slows delivery"], "pain_points_basis": ["Teams struggle with fragmented tooling and slow delivery, wasting hours every week"],
+                 "ai_automation_opportunities": ["Could auto-generate API documentation"], "opportunities_basis": ["Our platform lets you design, mock and document every API in one place"],
+                 "outreach_angle": "Your team is struggling with fragmented tooling", "outreach_basis": "Teams struggle with fragmented tooling and slow delivery",
+                 "model_confidence": "high"}
+    async with serve(handler_for({"acme.fixture.test": GENERIC})) as (port, hits):
+        src = write_csv(tmp_path / "in.csv", ["Company", "Website"], [["Acme", url(port, "acme")]])
+        res = await run_profiles(cfg_for(tmp_path, src, FakeBackend(answer=overreach)))
+    r = read_out(res["output"])[0]
+    fs = json.loads(r["field_support"])
+    assert r["status"] == "ok" and r["confidence"] in ("low", "medium"), r["confidence"]
+    assert fs["target_customers"] == "unsupported" and r["target_customers"] == "", "a tagline-level quote does not name any customers"
+    assert fs["industry_niche"] == "unsupported" and r["industry_niche"] == ""
+    assert r["products_services"] == "API design studio; Mock servers", "menu labels are not products"
+    assert fs["pain_points"] == "unsupported" and r["pain_points"] == "", "a market-wide problem is not this company's problem"
+    assert fs["outreach_angle"] == "unsupported" and r["outreach_angle"] == "", "an angle may not assert an unverified problem"
+    assert fs["ai_automation_opportunities"] == "unsupported", "the basis is copy addressed to the visitor"
+    assert "dropped as unsupported" in r["warnings"]
+    notes = json.loads(r["support_notes"])
+    assert "general_market_problem" in notes["pain_points"] and "addressed_to_visitors" in notes["ai_automation_opportunities"]
+    assert all(e["field"] not in ("target_customers", "industry_niche", "pain_points", "outreach_angle") for e in json.loads(r["evidence"]))
 
 
 async def test_the_input_is_never_overwritten_and_existing_outputs_are_never_replaced(tmp_path):
@@ -400,8 +582,9 @@ async def test_if_the_model_is_unavailable_at_start_no_website_is_contacted_and_
 
 
 async def test_web_derived_text_is_spreadsheet_safe(tmp_path):
-    sites = {"evil.fixture.test": {"/": __import__("tests.profile_sites", fromlist=["page"]).page("=HYPERLINK(1) | =cmd Co", "", "<h1>=cmd Co</h1><p>We sell =cmd Co things.</p>")}}
-    be = FakeBackend(answer={"company_name": "=cmd Co", "business_description": "=cmd Co things", "description_quote": "We sell =cmd Co things."})
+    sites = {"evil.fixture.test": {"/": __import__("tests.profile_sites", fromlist=["page"]).page("=HYPERLINK(1) | =cmd Co", "", "<h1>=cmd Co</h1><p>We sell =cmd Co things for logistics companies across several regions.</p>")}}
+    be = FakeBackend(answer={"company_name": "=cmd Co", "business_description": "=cmd Co things for logistics companies",
+                             "description_quote": "We sell =cmd Co things for logistics companies across several regions."})
     async with serve(handler_for(sites)) as (port, hits):
         src = write_csv(tmp_path / "in.csv", ["Company", "Website"], [["E", url(port, "evil")]])
         res = await run_profiles(cfg_for(tmp_path, src, be))

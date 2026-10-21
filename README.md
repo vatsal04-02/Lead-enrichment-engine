@@ -124,13 +124,24 @@ python -m leadengine.profiles .\companies.csv -o .\profile_out\companies.enriche
 `--mapping '{"website":"Company URL","name":"Company"}'`. Your original columns are kept, and the enrichment columns follow them.
 
 **Output columns:** `company_name, website, business_description, products_services, industry_niche, target_customers, pain_points, ai_automation_opportunities,
-outreach_angle, evidence_urls, confidence`, plus `model_confidence, field_support, evidence, pages_used, pages_failed, warnings, status, error, backend, model, enriched_at`.
+outreach_angle, evidence_urls, confidence`, plus `model_confidence, field_support, support_notes, evidence, pages_used, pages_failed, warnings, status, error, backend, model, enriched_at`.
 
-**What is and is not a fact.** The model is a reader, not a source of truth. `field_support` says, per field: `supported` (tied to a passage that verifiably appears on a
-fetched page - see the quote and URL in `evidence`), `inferred` (pain points, AI-automation opportunities and the outreach angle are *hypotheses*: kept only if they cite a verifiable
-passage, and meant for human review - never a claim about the company), `unsupported` (the model said it but nothing on the pages backs it: dropped, never written) or `missing`.
-`confidence` is **computed** from how much was supported (`high` needs ≥4 of the 5 factual fields on ≥2 pages), not taken from the model's `model_confidence`. Hidden page text and
-instruction-like text are removed before the model sees the page and reported in `warnings`. Presence is not correctness: review before use. E-mail/phone are not collected here.
+**What is and is not a fact.** The model is a reader, not a source of truth. `field_support` says, per field:
+- `supported` - tied to a quote that (1) verifiably appears on a fetched page, (2) is specific (not a tagline, menu, call-to-action or cookie/legal boilerplate) and (3) contains the terms of
+  *that* claim. A real quote that says something else supports nothing: a "world's leading platform" tagline does not support "target customers: developers". Quote, URL and the
+  claim/quote term overlap are in `evidence`. Product items must be on a page and cannot be menu labels (Pricing, Docs ...) or the company name.
+- `inferred` - pain points, AI-automation opportunities and the outreach angle are *hypotheses*, written with a `[hypothesis] ` prefix, for human review, never a claim about the company.
+  They are kept only with a relevant, specific basis passage. A pain point additionally needs a statement about the company's *own operations*: a general industry problem
+  ("teams struggle with ..."), copy addressed to visitors ("you ..."), or a description of what the product does for customers is never evidence that this company has that problem.
+  An outreach angle may not assert a problem and may not rest on the generic description.
+- `unsupported` - the model said it but nothing relevant backs it: dropped, never written; `support_notes` records the reason by category only (never model-supplied text).
+- `missing` - the model said nothing.
+
+`confidence` is **computed** from evidence coverage and relevance, not from how many fields are filled and not by the model: `high` needs description + products + at least one of
+industry/customers supported, by ≥2 different pages and ≥3 different quotes (a quote reused for several fields counts once), with no factual claim dropped; hypotheses never count. If the
+model rates its own answer below `high` the result is capped at `medium` (a model can lower confidence, never raise it) and `warnings` says so. Hidden page text and
+instruction-like text are removed before the model sees the page and reported in `warnings`. These rules are tested with synthetic pages and a stub model only: **they have not been
+validated against real websites or the real qwen3:4b output**; presence is not correctness, so review before use. E-mail/phone are not collected here.
 
 **Failure handling:** each website runs under its own deadline and try/except; a robots refusal, bad URL, timeout, model error or crash is written on that row (`status` = `failed`/`skipped`,
 reason in `error`) and the batch continues. If Ollama itself disappears mid-run, no further websites are fetched, the remaining rows are `not_processed`, and the exit code is 1.

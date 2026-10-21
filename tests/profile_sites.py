@@ -22,6 +22,19 @@ GOOD = {
                      '<h1>Contact</h1><p>Write to <a href="mailto:hello@lucknow-flow.example">hello@lucknow-flow.example</a> or call +91 522 555 0100.</p>'),
 }
 
+# A large-vendor style site: lofty taglines, menu labels, copy addressed to "you", and a description of a general market problem.
+GENERIC = {
+    "/": page("Acme API Platform | Build APIs faster", "Acme API Platform is the world's leading API platform.",
+              "<h1>Acme API Platform</h1><p>The world's leading API platform for building and using APIs. Sign up for free.</p>"
+              "<p>Teams struggle with fragmented tooling and slow delivery, wasting hours every week.</p>"
+              "<p>Our platform lets you design, mock and document every API in one place.</p>"
+              "<ul><li>Pricing</li><li>Docs</li><li>Enterprise</li></ul>"),
+    "/about": page("About us | Acme API Platform", "",
+                   "<h1>About us</h1><p>Acme API Platform helps teams collaborate on APIs. Get started with a free account today.</p>"),
+    "/services": page("Services | Acme API Platform", "", "<h1>Our services</h1><ul><li>API design studio</li><li>Mock servers</li></ul>"),
+    "/contact": page("Contact | Acme API Platform", "", "<h1>Contact</h1><p>Contact sales to request a demo.</p>"),
+}
+
 INJECTION = {
     "/": page("Home | Bright Bots", "Bright Bots makes chatbots.",
               "<h1>Bright Bots</h1><p>We build chatbots for support teams.</p>"
