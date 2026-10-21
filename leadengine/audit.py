@@ -28,7 +28,7 @@ class FetchAudit:
         """Awaiting put() applies backpressure instead of dropping audit rows."""
         host = (urlsplit(url).hostname or "")[:253]
         await self.q.put((job_id, kind, host, url[:2000], res.status or None, res.from_cache, res.bytes or 0,
-                          int(res.elapsed_ms) if res.elapsed_ms else None, res.retries, res.error_kind or None,
+                          int(res.elapsed_ms) if res.elapsed_ms else 0, res.retries, res.error_kind or None,
                           sanitize_for_log(res.error, 300) if res.error else None))
 
     async def _flush_some(self) -> None:

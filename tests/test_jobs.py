@@ -371,7 +371,10 @@ async def test_sigkilled_worker_process_loses_no_work(fixtures):
             st = await jobs.job_status(eng.db, info["job_id"])
             if st["counts"]["running"] > 0:
                 break
-        p.send_signal(signal.SIGKILL)
+        if os.name == "nt":
+           p.kill()
+        else:
+           p.send_signal(signal.SIGKILL)
         p.wait(timeout=10)
         st = await jobs.job_status(eng.db, info["job_id"])
         assert st["status"] == "running" and st["counts"]["running"] > 0          # orphaned: nobody owns it any more
