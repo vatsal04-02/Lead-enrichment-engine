@@ -27,6 +27,7 @@ from leadengine.discovery.sources.overpass import OverpassSource, build_query, l
 from leadengine.discovery.sources.seed_pages import SeedPagesSource
 from leadengine.discovery.urlcheck import build_candidates, check_url
 from tests.conftest import SG_PYTHON, sg_available
+from tests.netguard import netguard, no_network  # noqa: F401  (fixtures: loopback allowed, outbound refused and recorded)
 
 
 def write_csv(path: Path, rows: list[list[str]]) -> str:
@@ -223,16 +224,6 @@ def test_forced_limits_equal_the_stage5_pilot_limits_and_cannot_be_relaxed(monke
 
 
 # ------------------------------------------------------------------ dry run and CLI gates contact nothing
-@pytest.fixture
-def no_network(monkeypatch):
-    def refuse(*a, **k):
-        raise AssertionError("network access attempted during a dry run")
-    monkeypatch.setattr(socket.socket, "connect", refuse)
-    monkeypatch.setattr(socket, "create_connection", refuse)
-    monkeypatch.setattr(socket, "getaddrinfo", refuse)
-    return refuse
-
-
 async def test_dry_run_runs_offline_parts_lists_network_targets_and_contacts_nothing(tmp_path, no_network):
     p = write_csv(tmp_path / "in.csv", [["Company", "Website"], ["Alpha", "alpha-works.in"], ["Bad", "nope nope"]])
     plan = RunPlan(command="run", sources=[CsvImportSource(p), SeedPagesSource(["https://list.example.org/ai"]), OverpassSource()],
