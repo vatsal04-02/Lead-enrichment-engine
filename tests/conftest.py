@@ -14,6 +14,12 @@ if sys.platform == "win32":
 from leadengine.config import Settings
 from leadengine.engine import Engine
 from leadengine.fixture_sites import FixtureServer
+from tests.netguard import clean_le_env
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_settings(clean_le_env):
+    """Every test sees default Settings, whatever is exported in the developer's shell or written in their .env (see clean_le_env)."""
 
 DB_URL = os.environ.get("LE_TEST_DATABASE_URL", "postgresql://enrich@127.0.0.1:55432/enrich_test")
 

@@ -124,12 +124,16 @@ class NetworkGuard:
 
 @pytest.fixture
 def clean_le_env(monkeypatch):
-    """Remove ambient LE_* settings (LE_DATABASE_URL, LE_USER_AGENT, LE_HOST_OVERRIDES, ...) so a test can neither depend on nor touch the
-    developer's own configuration or database. LE_TEST_* (the test harness's own switches) are kept."""
+    """Make Settings() hermetic: remove ambient LE_* settings (LE_DATABASE_URL, LE_USER_AGENT, LE_HOST_OVERRIDES, ...) AND stop Settings from
+    reading a developer's .env file, so a test can neither depend on nor touch the developer's own configuration or database.
+    (pydantic-settings precedence is kwargs > environment > .env > class defaults, so any of these silently replaces a default a test
+    relies on - e.g. the placeholder user agent.) LE_TEST_* (the test harness's own switches) are kept."""
     import os
+    from leadengine.config import Settings
     for k in list(os.environ):
         if k.startswith("LE_") and not k.startswith("LE_TEST_"):
             monkeypatch.delenv(k, raising=False)
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 @pytest.fixture
