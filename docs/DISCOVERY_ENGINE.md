@@ -74,6 +74,13 @@ with provenance intact. Synthetic fixture hosts (`*.fixture.test`) are rejected 
   connection per host, ≥2 s (default 3 s) between requests to a host, ≤3 pages per company, ≤1 retry, 1 MB responses, 20 s hard deadline,
   browser off, no in-house AI tier, a run time budget (`--max-seconds`, default 3600) and a page budget; model: ≤2 calls and ≤2 pages per
   company, one worker, timeout `--model-timeout` (default 120 s).
+* **The confirmed number is binding.** `--confirm-count` is checked against the plan *and again at execution*: if the candidate list grew after it was
+  counted (e.g. the CSV was edited), the run is refused before anything is written or contacted. A network source that plans zero requests (e.g.
+  `--osm` without `--location`) is never "authorized" by default.
+* **A live run writes to whatever database the environment names.** `--database-url` defaults to `LE_DATABASE_URL`, so set it deliberately: the run
+  prints `database: host:port/name` (no credentials) before it starts and records it in `run_config.json`. Use a dedicated database.
+* Tests never read your environment: the gate suite (`tests/test_discovery_gates.py`) removes ambient `LE_*` variables, uses synthetic hosts only, and
+  asserts that every refusal happens before `execute()`, before any Engine/Fetcher exists, and with zero DNS/network attempts.
 * Existing data is preserved: there is no reset/truncate path; the database is only added to (use a dedicated one, e.g. `enrich_discovery`); each
   run's output contains only its own companies.
 * No outreach of any kind is implemented.

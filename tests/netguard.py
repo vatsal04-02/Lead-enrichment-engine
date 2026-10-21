@@ -15,7 +15,6 @@ from __future__ import annotations
 import ipaddress
 import socket
 import sys
-from typing import Optional
 
 import pytest
 
@@ -121,6 +120,16 @@ class NetworkGuard:
         if emulate_windows_socketpair and sys.platform != "win32":
             monkeypatch.setattr(socket, "socketpair", emulated_windows_socketpair)
         return self
+
+
+@pytest.fixture
+def clean_le_env(monkeypatch):
+    """Remove ambient LE_* settings (LE_DATABASE_URL, LE_USER_AGENT, LE_HOST_OVERRIDES, ...) so a test can neither depend on nor touch the
+    developer's own configuration or database. LE_TEST_* (the test harness's own switches) are kept."""
+    import os
+    for k in list(os.environ):
+        if k.startswith("LE_") and not k.startswith("LE_TEST_"):
+            monkeypatch.delenv(k, raising=False)
 
 
 @pytest.fixture

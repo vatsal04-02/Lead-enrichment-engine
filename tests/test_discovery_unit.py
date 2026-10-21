@@ -27,7 +27,7 @@ from leadengine.discovery.sources.overpass import OverpassSource, build_query, l
 from leadengine.discovery.sources.seed_pages import SeedPagesSource
 from leadengine.discovery.urlcheck import build_candidates, check_url
 from tests.conftest import SG_PYTHON, sg_available
-from tests.netguard import netguard, no_network  # noqa: F401  (fixtures: loopback allowed, outbound refused and recorded)
+from tests.netguard import clean_le_env, netguard, no_network  # noqa: F401  (fixtures: loopback allowed, outbound refused and recorded; no ambient LE_*)
 
 
 def write_csv(path: Path, rows: list[list[str]]) -> str:
@@ -224,11 +224,11 @@ def test_forced_limits_equal_the_stage5_pilot_limits_and_cannot_be_relaxed(monke
 
 
 # ------------------------------------------------------------------ dry run and CLI gates contact nothing
-async def test_dry_run_runs_offline_parts_lists_network_targets_and_contacts_nothing(tmp_path, no_network):
-    p = write_csv(tmp_path / "in.csv", [["Company", "Website"], ["Alpha", "alpha-works.in"], ["Bad", "nope nope"]])
+async def test_dry_run_runs_offline_parts_lists_network_targets_and_contacts_nothing(tmp_path, no_network, clean_le_env):
+    p = write_csv(tmp_path / "in.csv", [["Company", "Website"], ["Alpha", "http://alpha.fixture.test/"], ["Bad", "nope nope"]])
     plan = RunPlan(command="run", sources=[CsvImportSource(p), SeedPagesSource(["https://list.example.org/ai"]), OverpassSource()],
                    settings=forced_settings(database_url="postgresql://u@h/db", user_agent="x/1 (+https://a.b; a@b.c)"),
-                   locations=["Pune"], out_root=str(tmp_path / "out"), authorized=False,
+                   locations=["Pune"], out_root=str(tmp_path / "out"), authorized=False, allow_synthetic=True,
                    next_commands=["python -m leadengine.discovery run ... --live --confirm-terms-reviewed --confirm-count 101"])
     res = await execute(plan)
     d = Path(res["out_dir"])
@@ -240,29 +240,8 @@ async def test_dry_run_runs_offline_parts_lists_network_targets_and_contacts_not
     assert {f.name for f in d.iterdir()} >= {"discovery_candidates.csv", "enriched_leads.csv", "discovery_report.md", "rejected_candidates.csv", "run_config.json"}
 
 
-def test_cli_dry_run_by_default_and_every_live_gate_refuses_before_any_network(tmp_path, monkeypatch, capsys, no_network):
-    p = write_csv(tmp_path / "in.csv", [["Website"], ["alpha-works.in"], ["beta-works.in"]])
-    base = ["run", "--csv", p, "--out-root", str(tmp_path / "out"), "--database-url", "postgresql://u@h/db"]
-    monkeypatch.setenv("LE_USER_AGENT", "FlowHQBot/1.0 (+https://flowhq.example/bot; ops@flowhq.example)")
-    assert cli_main(base) == 0                                                          # dry run
-    assert "DRY RUN complete" in capsys.readouterr().err
-    assert cli_main(base + ["--live"]) == 2 and "confirm-terms-reviewed" in capsys.readouterr().err
-    assert cli_main(base + ["--live", "--confirm-terms-reviewed"]) == 2 and "must equal" in capsys.readouterr().err
-    assert cli_main(base + ["--live", "--confirm-terms-reviewed", "--confirm-count", "3"]) == 2 and "must equal" in capsys.readouterr().err
-    assert cli_main(base + ["--confirm-count", "2"]) == 2 and "only apply together" in capsys.readouterr().err
-    monkeypatch.setenv("LE_HOST_OVERRIDES", "*.x=127.0.0.1")
-    assert cli_main(base + ["--live", "--confirm-terms-reviewed", "--confirm-count", "2"]) == 2 and "LE_HOST_OVERRIDES" in capsys.readouterr().err
-    monkeypatch.delenv("LE_HOST_OVERRIDES")
-    monkeypatch.setenv("LE_USER_AGENT", "Bot/1.0")
-    assert cli_main(base + ["--live", "--confirm-terms-reviewed", "--confirm-count", "2"]) == 2 and "LE_USER_AGENT" in capsys.readouterr().err
-    monkeypatch.setenv("LE_USER_AGENT", "FlowHQBot/1.0 (+https://flowhq.example/bot; ops@flowhq.example)")
-    assert cli_main(["run", "--csv", p, "--live", "--confirm-terms-reviewed", "--confirm-count", "2", "--out-root", str(tmp_path / "out")]) == 2
-    assert "no database" in capsys.readouterr().err
-    assert cli_main(["run"]) == 2 and "no discovery source" in capsys.readouterr().err
-
-
-def test_cli_plan_prints_exact_targets_and_contacts_nothing(tmp_path, capsys, no_network):
-    p = write_csv(tmp_path / "in.csv", [["Website"], ["alpha-works.in"]])
+def test_cli_plan_prints_exact_targets_and_contacts_nothing(tmp_path, capsys, no_network, clean_le_env):
+    p = write_csv(tmp_path / "in.csv", [["Website"], ["http://alpha.fixture.test/"]])
     assert cli_main(["plan", "--csv", p, "--seed-url", "https://list.example.org/a", "--osm", "--location", "Pune", "--location", "Mumbai",
                      "--limit", "50"]) == 0
     out = capsys.readouterr().out
@@ -270,8 +249,8 @@ def test_cli_plan_prints_exact_targets_and_contacts_nothing(tmp_path, capsys, no
     assert "list.example.org/a" in out and "Nothing was contacted" in out
 
 
-def test_discovery_output_goes_to_a_new_directory_each_run_and_previous_outputs_are_kept(tmp_path):
-    p = write_csv(tmp_path / "in.csv", [["Website"], ["alpha-works.in"]])
+def test_discovery_output_goes_to_a_new_directory_each_run_and_previous_outputs_are_kept(tmp_path, no_network, clean_le_env):
+    p = write_csv(tmp_path / "in.csv", [["Website"], ["http://alpha.fixture.test/"]])
     out = tmp_path / "o"
     assert cli_main(["discover", "--csv", p, "--out-root", str(out)]) == 0
     assert cli_main(["discover", "--csv", p, "--out-root", str(out)]) == 0

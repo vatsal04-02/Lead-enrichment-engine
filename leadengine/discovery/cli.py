@@ -19,7 +19,7 @@ from .doctor import DEFAULT_MODEL, DEFAULT_URL, run_doctor
 from .niche import expand_keywords
 from .pipeline import LIVE_LABEL, RunPlan, execute
 from .review import ReviewError, apply_review
-from .safety import DiscoveryError, forced_settings, live_gate, live_settings
+from .safety import DiscoveryError, database_target, forced_settings, live_gate, live_settings
 from .sources import SourceContext
 from .sources.csv_import import CsvImportSource
 from .sources.overpass import DEFAULT_ENDPOINT, OverpassSource
@@ -89,7 +89,9 @@ async def _plan(a, command: str) -> tuple[RunPlan, int, bool]:
         dres = await discover([s for s in sources if not s.needs_network], None, niches=niches, locations=locations, limit=a.limit,
                               extra_keywords=a.keyword or [])
         planned = len(dres.candidates)
-    authorized = True if planned == 0 else live_gate(a.live, a.confirm_terms_reviewed, a.confirm_count, planned)
+    # Nothing to contact -> nothing to confirm; but a network source that plans zero requests (e.g. --osm without --location) is NOT
+    # authorized: network sources only ever run after the gate passed for a non-zero number of targets.
+    authorized = live_gate(a.live, a.confirm_terms_reviewed, a.confirm_count, planned) if planned > 0 else not any(s.needs_network for s in sources)
     if authorized and planned > 0:
         if not a.database_url and command == "run":
             raise DiscoveryError("no database: set LE_DATABASE_URL (or --database-url). Use a dedicated database, e.g. enrich_discovery; "
@@ -106,8 +108,10 @@ async def _plan(a, command: str) -> tuple[RunPlan, int, bool]:
            "# (writes a NEW file):  python -m leadengine.discovery review --leads <this dir>/enriched_leads.csv --review reviewed.csv"]
     if planned > 0 and not a.live:
         nxt = ["# This was a dry run. To contact the targets above (after reviewing each source's terms and robots.txt):", live_cmd] + nxt
+    company_cap = None if command == "discover" else (a.limit if n_disc else planned)      # what the confirmation covers for company sites
     return RunPlan(command=command, sources=sources, settings=settings, niches=niches, locations=locations, extra_keywords=a.keyword or [],
                    limit=a.limit, out_root=a.out_root, label=a.label, authorized=authorized, mode_label=LIVE_LABEL,
+                   max_company_targets=company_cap,
                    backend_mode=a.backend, model=a.model, base_url=a.ollama_url, sg_python=a.sg_python, request_timeout=a.model_timeout,
                    max_seconds=a.max_seconds, next_commands=nxt, argv=sys.argv[1:]), planned, n_disc > 0
 
@@ -140,6 +144,9 @@ async def cmd_plan(a) -> int:
 
 async def _run(a, command: str) -> int:
     plan, planned, network = await _plan(a, command)
+    if plan.authorized and planned > 0:
+        print(f"LIVE run confirmed: up to {planned} target(s) may be contacted; database: {database_target(plan.settings.database_url)}",
+              file=sys.stderr, flush=True)
     res = await execute(plan)
     print(json.dumps({k: v for k, v in res.items() if k not in ("discovery", "leads_detail", "rows")}, indent=2))
     if not plan.authorized:

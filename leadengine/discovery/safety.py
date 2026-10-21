@@ -52,6 +52,19 @@ def live_settings(*, database_url: str, concurrency: int = 2, min_delay: float =
                            min_delay=min_delay, max_pages=max_pages, retries=retries, **extra)
 
 
+def database_target(url: Optional[str]) -> str:
+    """host:port/dbname of a PostgreSQL URL, WITHOUT credentials - safe to print and to store in run_config.json."""
+    if hasattr(url, "get_secret_value"):                     # Settings.database_url is a SecretStr
+        url = url.get_secret_value()
+    if not url:
+        return "(none)"
+    try:
+        p = urlsplit(url)
+        return f"{p.hostname or '?'}:{p.port or 5432}/{(p.path or '/').lstrip('/') or '?'}"
+    except ValueError:
+        return "(unparseable)"
+
+
 def live_gate(live: bool, terms_reviewed: bool, confirm_count: Optional[int], planned: int) -> bool:
     """False = dry run (nothing may be contacted). True = the person confirmed this exact, reviewed plan.
     Contacting real hosts needs explicit, specific confirmation (same idea as the pilot's --confirm-sites)."""

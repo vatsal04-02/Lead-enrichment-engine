@@ -22,7 +22,7 @@ from .models import now_iso
 from .niche import expand_keywords
 from .outputs import (make_output_dir, write_candidates, write_errors, write_json, write_leads, write_rejected, write_report)
 from .runner import build_primary, export_fetch_log
-from .safety import JsonlAudit
+from .safety import DiscoveryError, JsonlAudit, database_target
 
 LIVE_LABEL = "LIVE (real websites contacted)"
 SYNTH_LABEL = "SYNTHETIC FIXTURES (local test servers; not real businesses)"
@@ -48,6 +48,7 @@ class RunPlan:
     sg_python: str = ""
     request_timeout: float = 120.0
     max_seconds: int = 3600
+    max_company_targets: Optional[int] = None       # the number the person confirmed: execute() refuses to enrich more than this
     primary_factory: Optional[Callable[..., Awaitable]] = None      # tests: inject a primary enricher
     next_commands: list = field(default_factory=list)
     argv: list = field(default_factory=list)
@@ -70,7 +71,7 @@ def _config_record(p: RunPlan, mode: str, started: str) -> dict:
             "crawl": {"respect_robots": s.respect_robots, "concurrency": s.global_concurrency, "per_host_delay_s": s.per_domain_min_delay,
                       "max_pages_per_company": s.max_pages_per_company, "http_retries": s.http_max_retries, "total_timeout_s": s.total_timeout,
                       "max_response_bytes": s.max_response_bytes, "browser": s.browser_enabled, "user_agent": s.user_agent},
-            "max_seconds": p.max_seconds, "paid_apis": "none", "database": "not recorded (may contain credentials)"}
+            "max_seconds": p.max_seconds, "paid_apis": "none", "database": database_target(s.database_url) + " (credentials not recorded)"}
 
 
 async def execute(plan: RunPlan) -> dict:
@@ -95,10 +96,22 @@ async def execute(plan: RunPlan) -> dict:
         if fetcher is not None:
             await fetcher.aclose()
     discover_seconds = time.monotonic() - t0
+    if plan.authorized and plan.max_company_targets is not None and len(dres.candidates) > plan.max_company_targets:
+        # The confirmation named an exact number. The candidate list changed after it was counted (e.g. the CSV was edited): refuse
+        # before anything is written or any company site is contacted.
+        try:
+            out.rmdir()
+        except OSError:
+            pass
+        raise DiscoveryError(f"refused: this run would contact {len(dres.candidates)} company site(s) but the confirmation covered "
+                             f"{plan.max_company_targets}. The input changed after it was counted; re-run `plan` and confirm again.")
     if not plan.authorized:
         for s in net_sources:
-            for line in plan_requests([s], plan.niches, plan.locations, plan.limit, keywords):
+            lines = plan_requests([s], plan.niches, plan.locations, plan.limit, keywords)
+            for line in lines:
                 dres.notes.append(f"NOT RUN (dry run) - `{s.name}` would make: {line}")
+            if not lines:
+                dres.notes.append(f"NOT RUN - `{s.name}` has nothing to contact as configured (check --location / --seed-url)")
     files = {}
     files["discovery_candidates.csv"] = f"{len(dres.candidates)} validated, de-duplicated candidates with source, niche/location query, timestamps"
     cand_path = write_candidates(out, dres.candidates)
