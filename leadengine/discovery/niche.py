@@ -16,6 +16,12 @@ SYNONYMS = {
            "chatbots", "ai agent", "ai agents", "agentic", "conversational ai", "nlp", "copilot"],
     "chatbot": ["chatbot", "chatbots", "conversational", "voicebot", "whatsapp bot"],
     "crm": ["crm", "hubspot", "salesforce", "zoho"],
+    "whatsapp": ["whatsapp", "whatsapp automation", "whatsapp business", "whatsapp bot", "whatsapp api"],
+    "it": ["it services", "information technology", "software", "software development", "consulting", "technology services",
+           "digital transformation", "outsourcing", "systems integration"],
+    "software": ["software", "software development", "saas", "it services"],
+    "bpo": ["bpo", "business process outsourcing", "business process", "bpm"],
+    "process": ["business process", "process automation", "bpm", "bpo", "workflow"],
     "marketing": ["marketing automation", "lead generation", "outreach"],
 }
 

@@ -115,7 +115,8 @@ python -m leadengine.discovery doctor          # is Ollama / qwen3:4b / the libr
 python -m leadengine.discovery plan --csv my_candidates.csv --osm --location Pune
 python -m leadengine.discovery run  --csv my_candidates.csv          # dry run: nothing contacted
 ```
-Details, commands for Windows and the live run, status and limitations: **[docs/DISCOVERY_ENGINE.md](docs/DISCOVERY_ENGINE.md)**.
+Automatic sources: Wikidata (`--wikidata`, CC0) and local OpenStreetMap extracts (`--osm-file`), with a `check-sources` robots.txt preflight; why other sources
+were rejected (closed/paid/terms): **[docs/DISCOVERY_SOURCES.md](docs/DISCOVERY_SOURCES.md)**. Details, commands for Windows and the live run, status and limitations: **[docs/DISCOVERY_ENGINE.md](docs/DISCOVERY_ENGINE.md)**.
 
 ## REST API (`/v1`, optional bearer token `LE_API_TOKEN`)
 

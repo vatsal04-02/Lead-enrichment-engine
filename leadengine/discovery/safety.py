@@ -65,6 +65,23 @@ def database_target(url: Optional[str]) -> str:
         return "(unparseable)"
 
 
+def database_name(url) -> str:
+    """The database name of a PostgreSQL URL ('' if unknown). Accepts a SecretStr."""
+    if hasattr(url, "get_secret_value"):
+        url = url.get_secret_value()
+    try:
+        return (urlsplit(url or "").path or "").lstrip("/").split("?")[0]
+    except ValueError:
+        return ""
+
+
+def protected_databases(cli_values) -> set[str]:
+    """Database names this process must never write to: --protect-database (repeatable) plus LE_DISCOVERY_PROTECTED_DATABASES
+    (comma separated). Case-insensitive. Nothing is hard-coded: you name the databases you want protected (e.g. your live pilot)."""
+    env = os.environ.get("LE_DISCOVERY_PROTECTED_DATABASES", "")
+    return {x.strip().lower() for x in [*env.split(","), *(cli_values or [])] if x and x.strip()}
+
+
 def live_gate(live: bool, terms_reviewed: bool, confirm_count: Optional[int], planned: int) -> bool:
     """False = dry run (nothing may be contacted). True = the person confirmed this exact, reviewed plan.
     Contacting real hosts needs explicit, specific confirmation (same idea as the pilot's --confirm-sites)."""

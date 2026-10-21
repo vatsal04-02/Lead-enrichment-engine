@@ -539,6 +539,15 @@ class Fetcher:
             return True, "", ""
         return False, "robots", "disallowed by robots.txt"
 
+    async def robots_verdict(self, url: str) -> tuple[bool, str, str]:
+        """Would fetching `url` be allowed by robots.txt? -> (allowed, error kind, reason). Fetches robots.txt only (never the URL itself);
+        nothing is cached beyond the normal robots cache. Used by the discovery `check-sources` preflight."""
+        try:
+            cu = validate_url(url, self.s)
+        except BlockedDestination as e:
+            return False, "blocked", sanitize_for_log(str(e))
+        return await self._robots_allowed(cu.scheme, cu.host, cu.port, url, None, None)
+
     async def _load_robots(self, origin: str, run):
         ttl = 3600.0
         res = await self.fetch(origin + "/robots.txt", run, None, use_robots=False, ttl_override=86400)

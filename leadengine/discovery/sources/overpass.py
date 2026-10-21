@@ -13,16 +13,15 @@ import re
 from urllib.parse import quote
 
 from ..models import SRC_OSM, RawHit, now_iso
+from ..places import expand_locations, place_ok
 from . import SourceContext
 
 DEFAULT_ENDPOINT = "https://overpass-api.de/api/interpreter"
 OFFICES = "it|company|consulting|software|advertising|research|coworking|educational_institution"
 INDIA_BBOX = (6.0, 68.0, 37.6, 97.5)           # south, west, north, east: coarse filter against same-named places abroad
-NAME_RE = re.compile(r"^[^\W\d_][\w .'&()/-]{1,59}$", re.UNICODE)
-
 
 def location_ok(loc: str) -> bool:
-    return bool(NAME_RE.match(loc or ""))
+    return place_ok(loc)
 
 
 def build_query(location: str, keywords: list[str], cap: int) -> str:
@@ -62,7 +61,7 @@ class OverpassSource:
         return f"{self.endpoint}?data={quote(query, safe='')}"
 
     def planned_requests(self, ctx: SourceContext) -> list[str]:
-        return [f"GET {self.endpoint}?data=<Overpass query for area '{loc}'>  (+ GET robots.txt)" for loc in ctx.locations]
+        return [f"GET {self.endpoint}?data=<Overpass query for area '{place}'>  (+ GET robots.txt)" for place, _ in expand_locations(ctx.locations)]
 
     async def discover(self, ctx: SourceContext) -> list[RawHit]:
         ctx.notes.append("OpenStreetMap data: (c) OpenStreetMap contributors, ODbL 1.0 - https://www.openstreetmap.org/copyright")
@@ -71,7 +70,7 @@ class OverpassSource:
             ctx.error(self.name, "-", "no_location", "the OpenStreetMap source needs at least one --location (a city name)")
             return hits
         cap = max(10, min(ctx.limit * 3, 500))
-        for loc in ctx.locations:
+        for loc, requested in expand_locations(ctx.locations):
             if not location_ok(loc):
                 ctx.error(self.name, loc, "invalid_location", "location must be a plain place name (letters, spaces, . ' & ( ) - /)")
                 continue
@@ -79,7 +78,11 @@ class OverpassSource:
             url = self._url(q)
             res = await ctx.fetcher.fetch(url, accept_types=("application/json",))
             if not res.ok:
-                ctx.error(self.name, loc, res.error_kind or f"http_{res.status}", res.error or f"HTTP {res.status}")
+                msg = res.error or f"HTTP {res.status}"
+                if res.error_kind == "robots":
+                    msg += (" - the engine does not bypass robots.txt. Options: your own Overpass instance or a mirror whose robots.txt permits "
+                            "API use (--overpass-endpoint), an offline OpenStreetMap extract (--osm-file), Wikidata (--wikidata), or a manual CSV (--csv).")
+                ctx.error(self.name, loc, res.error_kind or f"http_{res.status}", msg)
                 continue
             try:
                 data = json.loads(res.text)
@@ -101,5 +104,5 @@ class OverpassSource:
                     website=site, name=tags["name"], location=addr, industry=tags.get("office"), source=SRC_OSM,
                     source_url=f"https://www.openstreetmap.org/{otype}/{oid}", source_ref=f"overpass area '{loc}'",
                     evidence=("OSM tags: " + ", ".join(f"{k}={tags[k]}" for k in ("office", "description", "addr:city") if tags.get(k)))[:300],
-                    niche_query="; ".join(ctx.niches), location_query=loc, discovered_at=now_iso()))
+                    niche_query="; ".join(ctx.niches), location_query=requested, discovered_at=now_iso()))
         return hits

@@ -26,7 +26,7 @@ def plan(sources: list[Source], niches: list[str], locations: list[str], limit: 
 
 
 async def discover(sources: list[Source], fetcher, *, niches: list[str], locations: list[str], limit: int,
-                   extra_keywords: list[str] = (), allow_synthetic: bool = False) -> DiscoveryResult:
+                   extra_keywords: list[str] = (), allow_synthetic: bool = False, only_niche_signal: bool = False) -> DiscoveryResult:
     keywords = expand_keywords(niches, extra_keywords)
     ctx = SourceContext(fetcher=fetcher, niches=niches, locations=locations, keywords=keywords, limit=limit)
     hits, per_source = [], {}
@@ -40,6 +40,13 @@ async def discover(sources: list[Source], fetcher, *, niches: list[str], locatio
         hits += got
     cands, rejected = build_candidates(hits, keywords=keywords, allow_synthetic=allow_synthetic)
     # sources' own signal first (stable), then the rest; the cap never drops a candidate silently - it is reported
+    dropped = 0
+    if only_niche_signal:       # broad sources (Wikidata/OSM) list every organisation in a city: keep only those whose OWN source text mentions a niche keyword
+        before = len(cands)
+        cands = [c for c in cands if c.niche_signal]
+        dropped = before - len(cands)
+        ctx.notes.append(f"--only-niche-signal: {dropped} of {before} valid candidates were dropped because the source's text for them "
+                         "mentions none of the niche keywords (a weak, name/industry-level hint; they are not necessarily irrelevant).")
     for c in cands:             # the run's own query, so every row states what was being looked for (not a claim about the company)
         c.niche_query = c.niche_query or "; ".join(niches)
         c.location_query = c.location_query or "; ".join(locations)

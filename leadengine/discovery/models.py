@@ -16,6 +16,8 @@ DUPLICATE = "duplicate"
 SRC_CSV = "manual_csv"
 SRC_SEED = "seed_page"
 SRC_OSM = "osm_overpass"
+SRC_OSM_FILE = "osm_extract"
+SRC_WIKIDATA = "wikidata"
 
 
 def now_iso() -> str:

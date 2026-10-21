@@ -42,6 +42,7 @@ class RunPlan:
     authorized: bool = False                        # True only after the explicit live confirmations (or for local test servers)
     mode_label: str = LIVE_LABEL
     allow_synthetic: bool = False                   # tests only: accept *.fixture.test hosts
+    only_niche_signal: bool = False                 # keep only candidates whose own source text mentions a niche keyword
     backend_mode: str = "auto"                      # auto | scrapegraph | inhouse
     model: str = DEFAULT_MODEL
     base_url: str = DEFAULT_URL
@@ -91,7 +92,8 @@ async def execute(plan: RunPlan) -> dict:
     t0 = time.monotonic()
     try:
         dres: DiscoveryResult = await discover(run_sources, fetcher, niches=plan.niches, locations=plan.locations, limit=plan.limit,
-                                               extra_keywords=plan.extra_keywords, allow_synthetic=plan.allow_synthetic)
+                                               extra_keywords=plan.extra_keywords, allow_synthetic=plan.allow_synthetic,
+                                               only_niche_signal=plan.only_niche_signal)
     finally:
         if fetcher is not None:
             await fetcher.aclose()

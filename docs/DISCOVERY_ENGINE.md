@@ -21,6 +21,13 @@ OpenStreetMap (Overpass)─┘   screen, dedupe by domain      └─ 3. both fa
 | Manual CSV | `--csv FILE` | imports candidates a person found by any compliant means (needs a website/domain column; optional `source`, `source_url`, `notes`, `city`, `industry`). **The always-available path.** | reads a local file; no network |
 | Public listing pages | `--seed-url URL` / `--seed-file FILE` | fetches *only the pages you name* (e.g. a published "AI automation agencies in India" list) and takes links to other sites. Directories, social networks, marketplaces and shared-hosting domains are dropped. | guarded fetcher: robots.txt enforced; a 401/403/CAPTCHA/bot challenge is recorded and **not** retried or bypassed; ≥2 s per host; you must read each site's terms first |
 | OpenStreetMap | `--osm --location CITY` | one read-only Overpass query per city for mapped offices (IT/company/consulting/software/…) with a `website` tag, plus mapped objects whose *name* matches the niche keywords; coarse India bounding box. Output includes the ODbL attribution. | open data, free; public instance is shared infrastructure—keep cities few or set `--overpass-endpoint` to your own; coverage of small agencies is partial |
+| Wikidata (SPARQL) | `--wikidata --location CITY` | organisations whose headquarters is in the city and that state an official website (CC0). Notable companies only. | guarded fetcher: **robots.txt enforced**, identifying User-Agent, one bounded query per place; a refusal is reported with the lawful alternatives, never bypassed |
+| OpenStreetMap local extract | `--osm-file FILE` (repeatable) | mapped offices with a website tag, read from a GeoJSON / OSM XML file you downloaded; **no network** | ODbL attribution in the report; robots does not apply to a local file |
+
+`--location "Delhi NCR"` expands to Delhi, New Delhi, Gurugram, Noida, Ghaziabad, Faridabad. `--only-niche-signal` keeps only candidates whose own source
+text mentions a niche keyword (useful for these broad sources). `check-sources` fetches **only the robots.txt files** of the remote sources (live-gated)
+and tells you which are allowed *before* a run. `--protect-database NAME` / `LE_DISCOVERY_PROTECTED_DATABASES` fence off databases (your live pilot)
+from a live run. Why these sources and not others, with quotas/keys and what could not be verified: **[docs/DISCOVERY_SOURCES.md](DISCOVERY_SOURCES.md)**.
 
 **Deliberately not implemented:** scraping Google/Bing/DuckDuckGo result pages, LinkedIn, Clutch/GoodFirms/Justdial or any directory that
 forbids automated access, and any paid search/enrichment API. Search-engine scraping violates those services' terms and runs into bot
@@ -110,6 +117,22 @@ python -m leadengine.discovery run --csv my_candidates.csv --limit 100 --live --
 # 3. after reviewing the output, record a person's checks (writes a NEW file; see docs\templates\discovery_review_template.csv)
 python -m leadengine.discovery review --leads discovery_out\<run>\enriched_leads.csv --review reviewed.csv
 ```
+
+Target run for Lucknow / Delhi NCR / Bengaluru (dry, then separately initiated; use a **dedicated** database and fence off your pilot database):
+
+```powershell
+$env:LE_DISCOVERY_PROTECTED_DATABASES = "flowhq_live_pilot"
+$env:LE_DATABASE_URL = "postgresql://USER@HOST:PORT/enrich_discovery"        # NOT the pilot database
+$niches = @("--niche","AI automation agency","--niche","business process automation","--niche","IT services","--keyword","WhatsApp automation","--keyword","workflow automation")
+$places = @("--location","Lucknow","--location","Delhi NCR","--location","Bengaluru")
+
+python -m leadengine.discovery check-sources --wikidata --osm                  # dry: lists the robots.txt files it would read (2 hosts)
+python -m leadengine.discovery check-sources --wikidata --osm --live --confirm-terms-reviewed --confirm-count 2   # reads ONLY robots.txt; exit 1 = refused
+python -m leadengine.discovery plan --wikidata --osm-file offices.geojson --csv my_candidates.csv @niches @places --only-niche-signal --limit 100
+python -m leadengine.discovery run  --wikidata --osm-file offices.geojson --csv my_candidates.csv @niches @places --only-niche-signal --limit 100   # dry run
+# live, only after reading the terms: add  --live --confirm-terms-reviewed --confirm-count <N printed by the dry run>
+```
+(`--osm` is left out of `run` because the public Overpass instance refused this engine via robots.txt; add it only if `check-sources` says your endpoint is allowed.)
 
 Two-step variant: `discover` (candidates only) → look at `discovery_candidates.csv` → `enrich --candidates discovery_out\<run>\discovery_candidates.csv`.
 

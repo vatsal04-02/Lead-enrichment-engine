@@ -240,3 +240,27 @@ def test_run_config_records_the_credential_free_database_target(h, tmp_path):
     rc, out, err = h.run(h.base() + [])
     cfg = json.loads((next(h.out.iterdir()) / "run_config.json").read_text())
     assert cfg["database"] == "dbhost.invalid:5433/enrich_gate_test (credentials not recorded)" and "pw" not in json.dumps(cfg)
+
+
+# ------------------------------------------------------------------ protected databases (e.g. a live pilot database)
+@pytest.mark.parametrize("how", ["flag", "env", "env_list_mixed_case"])
+def test_a_protected_database_is_refused_before_anything_runs_even_with_every_confirmation(h, how):
+    url = "postgresql://gate:pw@dbhost.invalid:5433/Flowhq_Live_Pilot"
+    extra = ["--protect-database", "flowhq_live_pilot"] if how == "flag" else []
+    if how == "env":
+        h.env(LE_DISCOVERY_PROTECTED_DATABASES="flowhq_live_pilot")
+    if how == "env_list_mixed_case":
+        h.env(LE_DISCOVERY_PROTECTED_DATABASES="other_db, FLOWHQ_LIVE_PILOT")
+    rc, out, err = h.run(["run", "--csv", str(h.csv), "--out-root", str(h.out), "--database-url", url] + LIVE_OK + extra)
+    assert rc == 2 and "protected list" in err and "pw" not in err
+    h.assert_nothing_ran()
+
+
+def test_the_protected_list_does_not_block_other_databases_and_comes_from_the_environment_database_too(h):
+    h.env(LE_DISCOVERY_PROTECTED_DATABASES="flowhq_live_pilot", LE_DATABASE_URL="postgresql://u@dbhost.invalid:5432/enrich_discovery")
+    rc, out, err = h.run(["run", "--csv", str(h.csv), "--out-root", str(h.out)] + LIVE_OK)
+    assert rc == 0 and h.calls[0].authorized is True and "enrich_discovery" in err
+    h.calls.clear()
+    h.env(LE_DATABASE_URL="postgresql://u@dbhost.invalid:5432/flowhq_live_pilot")              # the AMBIENT database is the protected one
+    rc, out, err = h.run(["run", "--csv", str(h.csv), "--out-root", str(h.out)] + LIVE_OK)
+    assert rc == 2 and "protected list" in err and h.calls == []

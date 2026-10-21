@@ -16,13 +16,19 @@ from pathlib import Path
 from ..compat import configure_event_loop
 from .discover import discover, plan as plan_requests
 from .doctor import DEFAULT_MODEL, DEFAULT_URL, run_doctor
+from ..fetcher import Fetcher
+from .models import now_iso
+from urllib.parse import urlsplit
 from .niche import expand_keywords
 from .pipeline import LIVE_LABEL, RunPlan, execute
 from .review import ReviewError, apply_review
-from .safety import DiscoveryError, database_target, forced_settings, live_gate, live_settings
+from .safety import (DiscoveryError, database_name, database_target, forced_settings, live_gate, live_settings,
+                     protected_databases)
 from .sources import SourceContext
 from .sources.csv_import import CsvImportSource
+from .sources.osm_extract import OsmExtractSource
 from .sources.overpass import DEFAULT_ENDPOINT, OverpassSource
+from .sources.wikidata import DEFAULT_ENDPOINT as WIKIDATA_ENDPOINT, WikidataSource
 from .sources.seed_pages import SeedPagesSource
 
 
@@ -39,8 +45,13 @@ def add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--sg-python", default=os.environ.get("LE_SCRAPEGRAPH_PYTHON", ""), help="Python>=3.12 with scrapegraphai installed")
     p.add_argument("--model-timeout", type=float, default=120.0, help="seconds per model call (small local models on CPU are slow)")
     p.add_argument("--database-url", default=os.environ.get("LE_DATABASE_URL"))
+    p.add_argument("--protect-database", action="append", default=[], metavar="NAME",
+                   help="refuse to run live against this database name (repeatable; also LE_DISCOVERY_PROTECTED_DATABASES=a,b). "
+                        "Use it to fence off your live pilot database.")
     p.add_argument("--concurrency", type=int, default=2); p.add_argument("--min-delay", type=float, default=3.0)
     p.add_argument("--max-pages", type=int, default=3); p.add_argument("--max-seconds", type=int, default=3600)
+    p.add_argument("--only-niche-signal", action="store_true",
+                   help="keep only candidates whose source text mentions a niche keyword (useful for broad sources: Wikidata, OSM)")
     p.add_argument("--live", action="store_true", help="actually contact the listed sources / company sites")
     p.add_argument("--confirm-terms-reviewed", action="store_true")
     p.add_argument("--confirm-count", type=int, help="the exact number printed by `plan` / the dry run")
@@ -51,8 +62,12 @@ def add_sources(p: argparse.ArgumentParser) -> None:
     p.add_argument("--mapping", help='JSON column mapping for --csv, e.g. {"website":"Company URL"}')
     p.add_argument("--seed-url", action="append", default=[], help="a public listing page YOU chose and reviewed (repeatable)")
     p.add_argument("--seed-file", help="text file: one seed URL per line, # comments allowed")
-    p.add_argument("--osm", action="store_true", help="OpenStreetMap/Overpass open data for each --location")
+    p.add_argument("--osm", action="store_true", help="OpenStreetMap/Overpass open data for each --location (subject to the endpoint's robots.txt)")
     p.add_argument("--overpass-endpoint", default=DEFAULT_ENDPOINT)
+    p.add_argument("--osm-file", action="append", default=[],
+                   help="a LOCAL OpenStreetMap extract (GeoJSON / Overpass-style OSM XML) you downloaded yourself; no network, repeatable")
+    p.add_argument("--wikidata", action="store_true", help="Wikidata SPARQL (CC0): organisations headquartered in each --location (needs robots.txt to allow it)")
+    p.add_argument("--wikidata-endpoint", default=WIKIDATA_ENDPOINT)
 
 
 def build_sources(a) -> list:
@@ -67,6 +82,10 @@ def build_sources(a) -> list:
         out.append(SeedPagesSource(list(dict.fromkeys(seeds))))
     if getattr(a, "osm", False):
         out.append(OverpassSource(a.overpass_endpoint))
+    if getattr(a, "wikidata", False):
+        out.append(WikidataSource(a.wikidata_endpoint))
+    if getattr(a, "osm_file", None):
+        out.append(OsmExtractSource(a.osm_file))
     if getattr(a, "candidates", None):
         out.append(CsvImportSource(a.candidates, None))
     return out
@@ -76,7 +95,7 @@ async def _plan(a, command: str) -> tuple[RunPlan, int, bool]:
     """-> (plan, number of targets a live run may contact, whether any source needs the network). Never touches the network."""
     sources = build_sources(a)
     if not sources:
-        raise DiscoveryError("no discovery source given: use --csv FILE, --seed-url URL / --seed-file FILE, and/or --osm --location CITY")
+        raise DiscoveryError("no discovery source given: use --csv FILE, --osm-file FILE, --wikidata / --osm with --location CITY, and/or --seed-url URL")
     niches = a.niche or ["AI automation agency"]
     locations = a.location or []
     ctx = SourceContext(fetcher=None, niches=niches, locations=locations, keywords=expand_keywords(niches, a.keyword or []), limit=a.limit)
@@ -87,7 +106,7 @@ async def _plan(a, command: str) -> tuple[RunPlan, int, bool]:
         planned = n_disc + a.limit                         # candidates are not known yet: the limit is the upper bound
     else:                                                   # offline sources only: the exact number of company sites is known now
         dres = await discover([s for s in sources if not s.needs_network], None, niches=niches, locations=locations, limit=a.limit,
-                              extra_keywords=a.keyword or [])
+                              extra_keywords=a.keyword or [], only_niche_signal=a.only_niche_signal)
         planned = len(dres.candidates)
     # Nothing to contact -> nothing to confirm; but a network source that plans zero requests (e.g. --osm without --location) is NOT
     # authorized: network sources only ever run after the gate passed for a non-zero number of targets.
@@ -96,6 +115,9 @@ async def _plan(a, command: str) -> tuple[RunPlan, int, bool]:
         if not a.database_url and command == "run":
             raise DiscoveryError("no database: set LE_DATABASE_URL (or --database-url). Use a dedicated database, e.g. enrich_discovery; "
                                  "discovery never resets or truncates anything.")
+        if command == "run" and database_name(a.database_url).lower() in protected_databases(a.protect_database):
+            raise DiscoveryError(f"refused: database {database_name(a.database_url)!r} is on the protected list "
+                                 "(--protect-database / LE_DISCOVERY_PROTECTED_DATABASES). Point --database-url at a dedicated discovery database.")
         settings = live_settings(database_url=a.database_url or "postgresql://unused@localhost/unused", concurrency=a.concurrency,
                                  min_delay=a.min_delay, max_pages=a.max_pages)
     else:                                                   # dry run: settings only feed the report's configuration block
@@ -111,7 +133,7 @@ async def _plan(a, command: str) -> tuple[RunPlan, int, bool]:
     company_cap = None if command == "discover" else (a.limit if n_disc else planned)      # what the confirmation covers for company sites
     return RunPlan(command=command, sources=sources, settings=settings, niches=niches, locations=locations, extra_keywords=a.keyword or [],
                    limit=a.limit, out_root=a.out_root, label=a.label, authorized=authorized, mode_label=LIVE_LABEL,
-                   max_company_targets=company_cap,
+                   max_company_targets=company_cap, only_niche_signal=a.only_niche_signal,
                    backend_mode=a.backend, model=a.model, base_url=a.ollama_url, sg_python=a.sg_python, request_timeout=a.model_timeout,
                    max_seconds=a.max_seconds, next_commands=nxt, argv=sys.argv[1:]), planned, n_disc > 0
 
@@ -154,6 +176,46 @@ async def _run(a, command: str) -> int:
     return 0
 
 
+def _check_targets(a) -> list[tuple[str, str]]:
+    """[(label, url)] of the remote endpoints/pages whose robots.txt verdict is worth knowing before a run."""
+    out = []
+    for s in build_sources(a):
+        if isinstance(s, (OverpassSource, WikidataSource)):
+            out.append((s.name, s.endpoint))
+        elif isinstance(s, SeedPagesSource):
+            out += [(s.name, u) for u in s.urls]
+    return out
+
+
+async def cmd_check_sources(a) -> int:
+    """Preflight: would each remote source's robots.txt allow this engine? Fetches robots.txt files ONLY (one per host), never the sources
+    themselves, and only after the same --live confirmations as a run. Exit 0 = all allowed, 1 = at least one refused/unreachable."""
+    targets = _check_targets(a)
+    if not targets:
+        raise DiscoveryError("nothing to check: add --osm, --wikidata and/or --seed-url (local sources like --csv / --osm-file need no network)")
+    origins = list(dict.fromkeys(f"{urlsplit(u).scheme}://{urlsplit(u).netloc}" for _, u in targets))
+    planned = len(origins)
+    if not live_gate(a.live, a.confirm_terms_reviewed, a.confirm_count, planned):
+        print(f"DRY RUN: nothing was contacted. check-sources would fetch robots.txt from {planned} host(s):")
+        for o in origins:
+            print(f"  {o}/robots.txt")
+        print(f"To do it: add --live --confirm-terms-reviewed --confirm-count {planned}")
+        return 0
+    settings = live_settings(database_url="postgresql://unused@localhost/unused", concurrency=1, min_delay=a.min_delay, max_pages=1)
+    fetcher = Fetcher(settings, db=None)
+    results, ok = [], True
+    try:
+        for label, url in targets:
+            allowed, kind, why = await fetcher.robots_verdict(url)
+            ok &= allowed
+            results.append({"source": label, "url": url, "allowed_by_robots": allowed, "kind": kind, "reason": why})
+    finally:
+        await fetcher.aclose()
+    print(json.dumps({"checked_at": now_iso(), "user_agent": settings.user_agent, "results": results,
+                      "note": "robots.txt only; a refusal is never bypassed. Allowed here is not a substitute for reading the source's terms."}, indent=2))
+    return 0 if ok else 1
+
+
 def cmd_review(a) -> int:
     try:
         print(apply_review(a.leads, a.review, a.out))
@@ -162,7 +224,7 @@ def cmd_review(a) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m leadengine.discovery", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("doctor", help="check Ollama / qwen3:4b / the ScrapeGraphAI interpreter (read-only; never downloads a model)")
@@ -172,11 +234,17 @@ def main(argv=None) -> int:
     for name, hlp in (("plan", "print exactly what a run would contact (no network)"), ("discover", "find + validate + dedupe candidates only"),
                       ("run", "discover, then enrich (ScrapeGraphAI -> in-house -> manual review)")):
         s = sub.add_parser(name, help=hlp); add_common(s); add_sources(s)
+    k = sub.add_parser("check-sources", help="preflight: fetch ONLY the robots.txt of each remote source (live-gated) and report allowed/refused")
+    add_common(k); add_sources(k)
     e = sub.add_parser("enrich", help="enrich an existing discovery_candidates.csv (or any CSV with a website column)")
     add_common(e); e.add_argument("--candidates", required=True)
     r = sub.add_parser("review", help="apply a human review sheet to enriched_leads.csv (writes a new file)")
     r.add_argument("--leads", required=True); r.add_argument("--review", required=True); r.add_argument("--out")
-    a = p.parse_args(argv)
+    return p
+
+
+def main(argv=None) -> int:
+    a = build_parser().parse_args(argv)
     configure_event_loop()
     try:
         if a.cmd == "doctor":
@@ -185,6 +253,8 @@ def main(argv=None) -> int:
             return asyncio.run(cmd_plan(a))
         if a.cmd == "review":
             return cmd_review(a)
+        if a.cmd == "check-sources":
+            return asyncio.run(cmd_check_sources(a))
         return asyncio.run(_run(a, {"discover": "discover", "run": "run", "enrich": "run"}[a.cmd]))
     except DiscoveryError as e:
         print(e, file=sys.stderr)
