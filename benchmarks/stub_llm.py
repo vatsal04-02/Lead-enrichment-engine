@@ -56,6 +56,36 @@ def heuristic_answer(fields: list[str], text: str) -> dict:
     return out
 
 
+def profile_answer(fields: list[str], digest: str, text: str = "") -> dict:
+    """Rule-based stand-in for the COMPANY PROFILE prompt (leadengine/profiles). NOT a language model: it reads the 'PAGE (kind): url' sections the
+    engine sends and fills the profile schema with phrases found in them, quoting the page verbatim. It exists to exercise the pipeline offline."""
+    nl = r"(?:\\n|\n)"
+    d = re.sub(r"-" + nl + r"\s*", "-", digest)
+    d = re.sub(r"(?<!\\n)" + nl + r"(?!" + nl + ")", " ", d)                       # undo the library's hard line wrapping
+    secs = {m.group(1): m.group(2) for m in re.finditer(r"## PAGE \((\w+)\): \S+?\s*" + nl + nl + r"(.*?)(?=## PAGE \(|$)", d, re.S)}
+    home, about, services = secs.get("home", ""), secs.get("about", ""), secs.get("services", "")
+    g = lambda pat, s, flags=0: (re.search(pat, s, flags) or [None, None])[1]
+    out: dict = {f: None for f in fields}
+    title = g(r"Page title:\s*(.+?)\s*(?:" + nl + nl + r"|$)", home)
+    segs = [x.strip() for x in re.split(r"\s*\|\s*", title or "") if x.strip()]
+    meta = g(r"Meta description:\s*(.+?)\s*(?:" + nl + nl + r"|$)", home)
+    blurb = g(r"# [^\n#]+?" + nl + nl + r"(.+?)(?:" + nl + nl + r"|$)", home)
+    items = re.findall(r"(?:^|\s)[*-]\s+(.+?)(?=\s+[*-]\s|" + nl + nl + r"|$)", services)
+    m = re.search(r"builds (.+?) for (.+?)\.", meta or "")
+    cust = g(r"work with (.+?) that", about) or (m.group(2) if m else None)
+    out.update({"company_name": segs[-1] if segs else None, "business_description": meta, "description_quote": meta,
+                "products_services": items or None, "products_quote": None,
+                "industry_niche": m.group(1) if m else None, "industry_quote": meta if m else None,
+                "target_customers": cust, "customers_quote": (g(r"(We work with [^.]+\.)", about) or meta) if cust else None,
+                "model_confidence": "medium"})
+    if blurb:
+        q = blurb.split(" so ")[0].strip()
+        out.update({"pain_points": ["Manual, repetitive customer follow-ups"], "pain_points_basis": [q],
+                    "ai_automation_opportunities": ["Automate routine customer follow-up messages"], "opportunities_basis": [q],
+                    "outreach_angle": "Offer a short review of which repetitive follow-ups could be automated.", "outreach_basis": q})
+    return {k: out.get(k) for k in fields}
+
+
 def noisy_answer(fields: list[str], digest_html: str, host: str, rate: float = 0.35) -> dict:
     """heuristic answer, but each non-empty value is replaced by an invented one with probability `rate` (deterministic per host+field)."""
     base = heuristic_answer(fields, digest_html)

@@ -54,6 +54,26 @@ def build_prompt(fields: list[str]) -> str:
         f"knowledge.\nFields:\n{lines}")
 
 
+_HIDDEN_STYLE = re.compile(r"display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\.0+)?\s*(?:;|$)|font-size\s*:\s*0(?:px|pt|em|rem|%)?\s*(?:;|$)"
+                           r"|(?:left|top|text-indent)\s*:\s*-\d{3,}|height\s*:\s*0(?:px)?\s*;[^\"]*overflow\s*:\s*hidden", re.I)
+
+
+def drop_hidden_elements(soup) -> int:
+    """Remove elements a visitor cannot see (hidden attribute, aria-hidden, display:none, visibility:hidden, zero opacity/size, off-screen text).
+    Hidden text is the classic carrier of prompt injection and is not something the company 'says' to its visitors. Best effort: CSS classes
+    cannot be evaluated. -> number of elements removed."""
+    n = 0
+    for el in list(soup.find_all(True)):
+        if el.attrs is None:                       # already removed along with an ancestor
+            continue
+        style = el.get("style") or ""
+        if (el.has_attr("hidden") or (el.get("aria-hidden") or "").lower() == "true" or _HIDDEN_STYLE.search(style)
+                or (el.name == "input" and (el.get("type") or "").lower() == "hidden")):
+            el.decompose()
+            n += 1
+    return n
+
+
 def make_digest(html: str, max_chars: int) -> str:
     """Compact, script-free HTML for the model. ScrapeGraphAI converts HTML to markdown before prompting, which drops <title>,
     <meta> and JSON-LD; so those are re-stated as visible paragraphs at the START of the body (and survive truncation).
@@ -64,6 +84,7 @@ def make_digest(html: str, max_chars: int) -> str:
     soup = BeautifulSoup(html or "", "lxml")
     for c in soup.find_all(string=lambda t: isinstance(t, Comment)):
         c.extract()
+    drop_hidden_elements(soup)
     ld = [re.sub(r"\s+", " ", t.string).strip() for t in soup.find_all("script", attrs={"type": re.compile(r"ld\+json", re.I)}) if t.string]
     meta_lines = []
     for m in soup.find_all("meta"):

@@ -9,3 +9,4 @@ benchmarks/results/*.tmp
 # pilot working files (may contain third-party company data and your permission records)
 pilot_out/
 discovery_out/
+profile_out/

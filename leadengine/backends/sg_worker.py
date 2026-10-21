@@ -184,6 +184,8 @@ def build_model(cfg: dict, guard):
     if prov == "ollama":
         from langchain_ollama import ChatOllama
         extra = {"reasoning": False} if cfg.get("thinking") == "off" else {}      # think=false: reasoning models must answer, not deliberate
+        if cfg.get("model_tokens"):
+            extra["num_ctx"] = int(cfg["model_tokens"])          # else Ollama's small default window silently truncates the prompt
         return ChatOllama(model=name, base_url=cfg["base_url"], temperature=0, num_predict=int(cfg["max_output_tokens"]),
                           format="json", callbacks=[guard], client_kwargs={"timeout": timeout}, **extra)
     if prov == "openai":
@@ -228,10 +230,16 @@ def classify(e: BaseException) -> tuple[str, str]:
     return "model_error", f"{name}: {msg}"[:400]
 
 
-def make_schema(fields: list[str]):
+def make_schema(fields: list[str], spec: dict | None = None):
+    """Flat pydantic model. spec maps field -> "str" (default) | "list" (list of strings); nothing else is accepted."""
     from typing import Optional
     from pydantic import BaseModel, create_model
-    return create_model("CompanyFacts", __base__=BaseModel, **{f: (Optional[str], None) for f in fields})
+    spec = spec or {}
+    for f, kind in spec.items():
+        if kind not in ("str", "list"):
+            raise _Err("invalid_request", f"unsupported schema type {kind!r} for {f!r}")
+    return create_model("CompanyFacts", __base__=BaseModel,
+                        **{f: ((Optional[list[str]], None) if spec.get(f) == "list" else (Optional[str], None)) for f in fields})
 
 
 def do_extract(req: dict, defaults: dict) -> dict:
@@ -244,7 +252,8 @@ def do_extract(req: dict, defaults: dict) -> dict:
     lim = req["limits"]
     from scrapegraphai.graphs import SmartScraperGraph
     guard = make_usage_guard(int(lim["max_calls"]))
-    model = build_model({**cfg, "timeout_s": lim["timeout_s"], "max_output_tokens": lim["max_output_tokens"]}, guard)
+    model = build_model({**cfg, "timeout_s": lim["timeout_s"], "max_output_tokens": lim["max_output_tokens"],
+                         "model_tokens": lim.get("model_tokens")}, guard)
     out = {"calls": 0, "tokens_in": 0, "tokens_out": 0, "latency_ms": 0.0, "values": None}
     html = req["html"]
     if not html.lstrip().startswith("<"):
@@ -255,7 +264,7 @@ def do_extract(req: dict, defaults: dict) -> dict:
             prompt=req["prompt"], source=html,
             config={"llm": {"model_instance": model, "model_tokens": int(lim["model_tokens"])}, "verbose": False,
                     "headless": True, "timeout": float(lim["timeout_s"]), "force": False, "cut": True},
-            schema=make_schema(req["fields"]))
+            schema=make_schema(req["fields"], req.get("schema")))
         res = graph.run()
         out["values"] = res.model_dump() if hasattr(res, "model_dump") else res
     finally:

@@ -103,6 +103,40 @@ Rollback = unset `LE_EXTRACTION_BACKEND`. Install (Windows PowerShell and Linux)
 interpretation and troubleshooting: **[docs/SCRAPEGRAPH_INTEGRATION.md](docs/SCRAPEGRAPH_INTEGRATION.md)**. Benchmarks against fixtures are
 synthetic and say nothing about live-site accuracy.
 
+## Local company profile enrichment (ScrapeGraphAI + Ollama `qwen3:4b`)
+
+Reads company names and websites from a CSV, fetches each site's public **Home, About, Services and Contact** pages (robots.txt respected, ≥2 s between requests to a
+site, never bypassing a challenge/401/403), has a **local** Ollama model extract a structured profile through ScrapeGraphAI, and writes a **new** CSV. The input file is never
+modified, **no database is used** (nothing can touch your pilot database), and no paid or cloud LLM is involved.
+
+```powershell
+# one-time: Ollama running locally, the model pulled by you, and a Python 3.12+ environment with the library (see docs/SCRAPEGRAPH_INTEGRATION.md)
+ollama pull qwen3:4b
+$env:LE_USER_AGENT = "FlowHQBot/1.0 (+https://your-site/bot; you@your-domain)"      # identifies you to the sites; required
+$env:LE_SCRAPEGRAPH_PYTHON = "C:\leadengine-sg\.venv-sg\Scripts\python.exe"
+
+python -m leadengine.profiles --check                      # verifies Ollama at http://localhost:11434 and that qwen3:4b is installed (never downloads)
+python -m leadengine.profiles .\sample.csv --dry-run       # validates the CSV, lists what WOULD be fetched, contacts nothing
+python -m leadengine.profiles .\sample.csv                 # 2-3 websites first; writes profile_out\sample.enriched-<time>.csv and a .summary.json
+python -m leadengine.profiles .\companies.csv -o .\profile_out\companies.enriched.csv --max-companies 200 --log-file .\profile_out\run.log   # a larger batch
+```
+(`python -m leadengine profile ...` is the same command.) The CSV needs a company-name column and a website column; headers are auto-detected, or pass
+`--mapping '{"website":"Company URL","name":"Company"}'`. Your original columns are kept, and the enrichment columns follow them.
+
+**Output columns:** `company_name, website, business_description, products_services, industry_niche, target_customers, pain_points, ai_automation_opportunities,
+outreach_angle, evidence_urls, confidence`, plus `model_confidence, field_support, evidence, pages_used, pages_failed, warnings, status, error, backend, model, enriched_at`.
+
+**What is and is not a fact.** The model is a reader, not a source of truth. `field_support` says, per field: `supported` (tied to a passage that verifiably appears on a
+fetched page - see the quote and URL in `evidence`), `inferred` (pain points, AI-automation opportunities and the outreach angle are *hypotheses*: kept only if they cite a verifiable
+passage, and meant for human review - never a claim about the company), `unsupported` (the model said it but nothing on the pages backs it: dropped, never written) or `missing`.
+`confidence` is **computed** from how much was supported (`high` needs ≥4 of the 5 factual fields on ≥2 pages), not taken from the model's `model_confidence`. Hidden page text and
+instruction-like text are removed before the model sees the page and reported in `warnings`. Presence is not correctness: review before use. E-mail/phone are not collected here.
+
+**Failure handling:** each website runs under its own deadline and try/except; a robots refusal, bad URL, timeout, model error or crash is written on that row (`status` = `failed`/`skipped`,
+reason in `error`) and the batch continues. If Ollama itself disappears mid-run, no further websites are fetched, the remaining rows are `not_processed`, and the exit code is 1.
+`--max-companies` (default 25) is a deliberate safety cap. A 4B model on CPU can take minutes per company: raise `--model-timeout` if you see `model_timeout`.
+Details of the local-model wiring and its safety boundary: [docs/SCRAPEGRAPH_INTEGRATION.md](docs/SCRAPEGRAPH_INTEGRATION.md).
+
 ## FlowHQ discovery & enrichment (find candidates, then enrich them)
 
 `python -m leadengine.discovery` finds candidate companies from sources you choose and have reviewed (manual CSV, public listing pages you name,

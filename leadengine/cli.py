@@ -122,6 +122,10 @@ def cmd_serve(a):
 
 
 def main(argv=None):
+    args = sys.argv[1:] if argv is None else list(argv)
+    if args[:1] == ["profile"]:           # `python -m leadengine profile INPUT.csv ...`: local-model company profile enrichment (no database)
+        from .profiles.cli import main as profile_main
+        raise SystemExit(profile_main(args[1:]))
     p = argparse.ArgumentParser(prog="leadengine")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init-db").set_defaults(fn=cmd_init_db)

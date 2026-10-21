@@ -260,12 +260,36 @@ class ScrapeGraphBackend:
         req = {"id": uuid.uuid4().hex[:8], "op": "extract", "html": digest, "fields": fields, "prompt": build_prompt(fields),
                "limits": {"max_calls": max(1, allowance), "timeout_s": self.s.scrapegraph_request_timeout,
                           "max_output_tokens": self.s.scrapegraph_max_output_tokens, "model_tokens": self.s.scrapegraph_model_tokens}}
+        resp = await self._request_with_retries(req, allowance, out)
+        if resp is not None:
+            out.fields, out.rejected = normalize_page(resp.get("values") or {}, fields, digest, page)
+        return out
+
+    async def extract_structured(self, html: str, prompt: str, schema: dict[str, str], *, max_output_tokens: Optional[int] = None,
+                                 max_calls: Optional[int] = None) -> tuple[Optional[dict], PageOutcome]:
+        """One model call over caller-built HTML content (never a URL) returning the model's raw JSON values for a flat schema
+        {field: "str"|"list"}. Same worker, guards, timeout, bounded retries and usage accounting as extract_page; the CALLER is
+        responsible for grounding the values. -> (values | None, outcome)"""
+        if self._fatal:
+            raise self._fatal
+        allowance = max_calls if max_calls is not None else self.s.scrapegraph_max_calls_per_company
+        out = PageOutcome(digest_chars=len(html))
+        req = {"id": uuid.uuid4().hex[:8], "op": "extract", "html": html, "fields": list(schema), "schema": schema, "prompt": prompt,
+               "limits": {"max_calls": max(1, allowance), "timeout_s": self.s.scrapegraph_request_timeout,
+                          "max_output_tokens": max_output_tokens or self.s.scrapegraph_max_output_tokens,
+                          "model_tokens": self.s.scrapegraph_model_tokens}}
+        resp = await self._request_with_retries(req, allowance, out)
+        return (resp.get("values") if resp is not None else None), out
+
+    async def _request_with_retries(self, req: dict, allowance: int, out: PageOutcome) -> Optional[dict]:
+        """Send one worker request with bounded retries. Success -> the worker's response (out.error cleared). Handled failure (timeout,
+        crash, model error, call budget) -> None with out.error_kind/out.error set. Unavailable model/library -> raises BackendUnavailable."""
         timeout = self.s.scrapegraph_request_timeout + 10
         for attempt in range(self.s.scrapegraph_retries + 1):
             if attempt:
                 if out.usage.calls >= allowance:
                     out.error_kind, out.error = out.error_kind or "call_budget", out.error or "per-company model-call allowance used up"
-                    return out
+                    return None
                 req["limits"] = {**req["limits"], "max_calls": max(1, allowance - out.usage.calls)}
             t0 = time.perf_counter()
             try:
@@ -279,7 +303,7 @@ class ScrapeGraphBackend:
                     continue
                 if e.kind in ("worker_crash", "model_timeout", "invalid_response"):
                     out.error_kind, out.error = e.kind, str(e)[:300]
-                    return out
+                    return None
                 self._fatal = e
                 raise
             out.usage.latency_ms += (time.perf_counter() - t0) * 1000
@@ -288,9 +312,8 @@ class ScrapeGraphBackend:
             out.usage.tokens_in += int(resp.get("tokens_in", 0))
             out.usage.tokens_out += int(resp.get("tokens_out", 0))
             if resp.get("ok"):
-                out.fields, out.rejected = normalize_page(resp.get("values") or {}, fields, digest, page)
                 out.error_kind = out.error = ""
-                return out
+                return resp
             err = resp.get("error", {})
             kind = err.get("kind", "model_error")
             if kind == "model_unavailable":
@@ -302,5 +325,5 @@ class ScrapeGraphBackend:
             if kind in ("model_timeout", "model_error") and attempt < self.s.scrapegraph_retries:
                 out.usage.retries += 1
                 continue
-            return out
-        return out
+            return None
+        return None
