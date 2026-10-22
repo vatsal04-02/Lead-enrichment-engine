@@ -20,7 +20,7 @@ from ...fetcher import Fetcher
 from ..e2e import S_NOT_SELECTED, S_SELECTED, balanced_order, identity_key
 from ..niche import expand_keywords
 from ..safety import JsonlAudit
-from .candidates import Rejection, from_result
+from .candidates import Rejection, from_result, priority
 from .providers import QueryCache, SearchError, SearchProvider
 from .queries import DEFAULT_CITIES, DEFAULT_INDUSTRIES, Query, plan_queries
 from .validate import SiteRecord, score, validate_site
@@ -197,6 +197,7 @@ async def run_web_discovery(cfg: WebConfig) -> dict:
                     break
             if fail_streak >= cfg.max_provider_failures:
                 stop_reason = "search_provider_failing"
+            new.sort(key=priority)                                  # official-looking domains are visited first (matters when the site budget is tight)
             room = max(0, cfg.max_sites - sites_visited)
             if len(new) > room:
                 stop_reason = "site_budget_exhausted"

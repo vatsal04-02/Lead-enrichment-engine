@@ -173,12 +173,15 @@ def test_name_inference_prefers_the_segment_matching_the_domain_and_never_guesse
 
 
 # ------------------------------------------------------------------ site validation + full pipeline over fixture sites
-def company(name, city="Pune", *, phone="+91 20 5550 0100", email=True, desc=True, india=True, about=True):
+def company(name, city="Pune", *, phone="+91 20 5550 0100", email=True, desc=True, india=True, about=True, email_domain=None, jsonld=False):
     d = f'<meta name="description" content="{name} builds enterprise software for customers.">' if desc else ""
     home = (f"<!doctype html><html><head><title>Home | {name}</title>{d}</head><body>{NAV}<h1>{name}</h1>"
             f"<p>{name} is a software company with an office in {city if india else 'Toronto'} building enterprise software, workflow automation and IT services "
             f"for mid-size customers across several industries. Our team designs, builds and supports business applications.</p></body></html>").encode()
-    contact_body = (f"<h1>Contact</h1><p>{'<a href=\"mailto:hello@' + name.lower().replace(' ', '') + '.example\">hello@' + name.lower().replace(' ', '') + '.example</a>' if email else ''} "
+    ed = email_domain or name.lower().replace(' ', '') + ".example"
+    ld = ('<script type="application/ld+json">' + json.dumps({"@context": "https://schema.org", "@type": "Organization", "name": name}) + "</script>") if jsonld else ""
+    home = home.replace(b"</head>", ld.encode() + b"</head>")
+    contact_body = (f"<h1>Contact</h1><p>{'<a href=\"mailto:hello@' + ed + '\">hello@' + ed + '</a>' if email else ''} "
                     f"<a href=\"tel:{phone}\">{phone}</a></p><address>12 Main Road, {city if india else 'Toronto, Canada'}</address>")
     return {"/": home, "/about": page(f"About | {name}", "", "<h1>About</h1><p>" + name + " was founded to build dependable business software. " * 3 + "</p>"),
             "/contact": page(f"Contact | {name}", "", contact_body)}
@@ -190,9 +193,14 @@ SITES = {
     "parked.fixture.test": {"/": page("Parked", "", "<p>This domain is for sale. Buy this domain today.</p>")},
     "parked2.fixture.test": {"/": page("Home", "", "<h1>Welcome</h1><p>" + "Industry leading solutions for every need. " * 8 + "This domain is for sale. "
                                       '<a href="mailto:owner@parked2.example">owner@parked2.example</a></p>')},
+    "punebiz.fixture.test": {"/": page("PuneBiz - Top 10 IT companies in Pune", "", "<h1>PuneBiz</h1><p>" + "Find the best IT companies in Pune. " * 5 +
+                                       "Browse companies, compare agencies and write a review. Claim your profile to get listed. " * 2 + "</p>")},
+    "mystery.fixture.test": company("Orbit Labs"),
+    "zeta.fixture.test": company("Quantum Works", email_domain="zeta.fixture.test"),
+    "solaris.fixture.test": company("Helios Group", email_domain="elsewhere.example", jsonld=True),
     "emptyco.fixture.test": {"/": page("Home", "", "<p>Hi</p>")},
     "blocked.fixture.test": company("Blocked Co"), "challenge.fixture.test": company("Challenge Co"),
-    "down.fixture.test": company("Down Co"), "dupname.fixture.test": company("Acme Soft"),
+    "down.fixture.test": company("Down Co"), "dupname.fixture.test": company("Acme Soft", email_domain="dupname.fixture.test"),
 }
 
 
@@ -390,6 +398,79 @@ async def test_enrichment_that_cannot_start_leaves_complete_discovery_outputs(tm
                                             backend=FakeBackend(fail_preflight="Ollama is not running")))
     assert s["enrichment"]["ran"] is False and "Ollama" in s["enrichment"]["error"] and s["valid_companies"] == 1
     assert (Path(s["run_directory"]) / "discovery.csv").exists() and (Path(s["run_directory"]) / "profile_input.csv").exists()
+
+
+# ------------------------------------------------------------------ third-party directories are never discovered as companies and never visited
+DIRECTORY_RESULTS = [
+    ("https://themanifest.com/in/it-services/companies/pune", "Top IT Services Companies in Pune"), ("https://www.goodfirms.co/it-services/pune", "Best IT Services Companies in Pune"),
+    ("https://www.selectedfirms.co/company/acme-soft", "Acme Soft - SelectedFirms"), ("https://www.selectedfirms.co/", "SelectedFirms"),
+    ("https://www.naukri.com/acme-soft-jobs-careers-123", "Acme Soft Jobs"), ("https://www.ambitionbox.com/overview/acme-soft-overview", "Acme Soft Reviews"),
+    ("https://www.designrush.com/agency/software-development/pune", "Software Development Companies in Pune"), ("https://www.techbehemoths.com/company/acme-soft", "Acme Soft | Pune"),
+    ("https://topdevelopers.co/profile/acme", "Acme"), ("https://www.upcity.com/", "UpCity"), ("https://cutshort.io/", "Cutshort"),
+    ("https://www.bestitfirmsindia.in/", "Best IT firms"), ("https://punebizlistings.in/", "Pune Biz"), ("https://www.linkedin.com/company/acme-soft", "Acme Soft | LinkedIn"),
+    ("https://unlisted-platform.in/companies/pune", "IT companies"), ("https://unlisted-platform.in/agency/acme-soft", "Acme Soft"),
+]
+
+
+@pytest.mark.parametrize("url,title", DIRECTORY_RESULTS)
+def test_third_party_directories_and_aggregators_are_rejected_before_any_visit(url, title):
+    cand, rej = from_result(res(url, title), Q)
+    assert cand is None and rej is not None and rej.reason in {"blocked_domain", "directory_or_aggregator", "directory_like_domain", "directory_listing_path",
+                                                               "listicle_or_article_title", "article_or_deep_page", "media_or_reference_site"}, (url, rej)
+
+
+def test_a_companys_own_pages_are_not_mistaken_for_directories():
+    for url, title in [("https://acme-soft.in/", "Acme Soft | Pune"), ("https://acme-soft.in/company", "About | Acme Soft"), ("https://acme-soft.in/services", "Services | Acme Soft"),
+                       ("https://www.acmefirm.com/contact", "Contact | Acme"), ("https://tcs.com/", "Tata Consultancy Services")]:
+        cand, rej = from_result(res(url, title), Q)
+        assert cand is not None, (url, rej)
+    from leadengine.discovery.websearch.candidates import name_matches_domain, priority
+    assert name_matches_domain("Tata Consultancy Services", "tcs.com") and name_matches_domain("Acme Soft Pvt Ltd", "acmesoft.in")
+    assert not name_matches_domain("Acme Soft", "selectedfirms.co") and not name_matches_domain("", "acme.in")
+    own = from_result(res("https://acmesoft.in/", "Acme Soft"), Q)[0]
+    other = from_result(res("https://randomsite.com/it-pune", "Acme Soft"), Q)[0]
+    assert priority(own) < priority(other), "root page + name matching the domain + .in comes first"
+
+
+async def test_an_unlisted_aggregator_homepage_is_detected_when_validated_and_not_counted():
+    async with serve(site_handler(None)) as (port, hits):
+        r = await validate("punebiz.fixture.test", port, name="PuneBiz")
+    assert r.status == "directory_or_aggregator" and "listing/review wording" in r.detail and r.confidence == 0.0
+
+
+async def test_a_site_must_be_tied_to_the_company_it_was_found_for():
+    async with serve(site_handler(None)) as (port, hits):
+        mystery = await validate("mystery.fixture.test", port, name="Orbit Labs")
+        assert mystery.status == "identity_unconfirmed" and mystery.confidence == 0.0 and "nothing ties this site" in mystery.detail
+        by_domain = await validate("acmesoft.fixture.test", port, name="Acme Soft")
+        by_email = await validate("zeta.fixture.test", port, name="Quantum Works")
+        by_jsonld = await validate("solaris.fixture.test", port, name="Some Other Search Title")
+    assert (by_domain.status, by_domain.official_basis) == ("valid", "name_matches_domain")
+    assert by_email.status == "valid" and by_email.official_basis in ("email_on_own_domain",)
+    assert by_jsonld.status == "valid" and by_jsonld.official_basis == "json_ld_organization"
+
+
+async def test_pipeline_never_requests_directory_sites_and_visits_official_looking_domains_first(tmp_path):
+    box, counts = [0], {}
+    answers = {}
+    async with serve(search_handler(box, answers, counts=counts)) as (port, hits):
+        box[0] = port
+        answers["it company in Pune"] = [("Pune Biz", f"http://punebiz.fixture.test:{port}/it-pune", ""), ("SelectedFirms", "selectedfirms.fixture.test", ""),
+                                         ("Acme Soft", "acmesoft.fixture.test", ""), ("Acme Soft | SelectedFirms", f"http://selectedfirms.fixture.test:{port}/company/acme-soft", "")]
+        s = await run_web_discovery(cfg_for(tmp_path, port, target=5, max_queries=1, batch_queries=1, industries={"IT services": ["it company"]}, cities=["Pune"], max_sites=1,
+                                            label="prio"))
+        asked = {h for h, _ in hits}
+    assert "selectedfirms.fixture.test" not in asked, "a directory is never requested, not even its robots.txt"
+    assert s["results_rejected"] == {"directory_like_domain": 2} and s["sites_visited"] == 1
+    rows = read_csv(Path(s["run_directory"]) / "discovery.csv")
+    by = {r["Domain"]: r["DiscoveryStatus"] for r in rows}
+    assert by["acmesoft.fixture.test"] == "selected" and by["punebiz.fixture.test"] == "not_visited", "the official-looking domain used the one allowed visit"
+    async with serve(search_handler(box, answers, counts=counts)) as (port2, hits2):
+        box[0] = port2
+        answers["it company in Pune"] = [("Pune Biz", f"http://punebiz.fixture.test:{port2}/it-pune", "")]
+        s2 = await run_web_discovery(cfg_for(tmp_path, port2, target=5, max_queries=1, industries={"IT services": ["it company"]}, cities=["Pune"], label="agg",
+                                             cache_dir=str(tmp_path / "c2")))
+    assert s2["valid_companies"] == 0 and s2["discovery_status_counts"] == {"directory_or_aggregator": 1}
 
 
 # ------------------------------------------------------------------ CLI: dry run by default, explicit confirmation for anything live

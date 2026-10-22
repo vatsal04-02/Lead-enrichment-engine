@@ -44,10 +44,16 @@ reused by enrichment (no second request for the same page). Options: `--industry
 `discovery.csv` columns: Company, Website, City, Industry/Niche, SourceURL, DiscoveryStatus, Confidence, MissingFields, Description, Email, Phone, Address, LinkedIn, ContactSourceURL, IndiaEvidence,
 IndustryEvidence, NameSource, Domain, SearchProvider, SearchQuery, SearchRank, AlsoFoundVia, Detail.
 * **City / Industry/Niche are what was searched for.** `IndiaEvidence` says whether the site itself confirms India (`.in`, `+91`, an Indian address, or the searched city in its text); `IndustryEvidence` lists niche terms found in the company's own text. The verified industry comes from the enrichment step (`industry_niche`, quote-grounded).
-* **DiscoveryStatus**: `selected` (valid, unique, inside the target), `discovered_not_selected`, `india_unconfirmed`, `not_a_company_site`, `parked_or_empty`, `robots_disallowed`, `anti_bot_blocked`, `redirected_off_domain`, `unreachable`, `duplicate_identity`, `not_visited` (site budget reached).
+* **DiscoveryStatus**: `selected` (valid, unique, inside the target), `discovered_not_selected`, `india_unconfirmed`, `directory_or_aggregator` (a listing/review site detected on visit), `identity_unconfirmed` (nothing ties the site to the company it was found for), `not_a_company_site`, `parked_or_empty`, `robots_disallowed`, `anti_bot_blocked`, `redirected_off_domain`, `unreachable`, `duplicate_identity`, `not_visited` (site budget reached).
 * **Confidence** (0-1) is a heuristic over evidence found (company-like site reached .25, name confirmed on the site .15, India evidence .20/.10, description .10, email or phone .10, address .10, niche terms .10, +.05 per extra independent search hit up to 2). It is not a probability. `MissingFields` lists what the site did not provide.
 * Emails/phones are the ones the company publishes on its own pages; they are never mailbox-verified.
 * De-duplication: by registrable domain (a second sighting only adds `AlsoFoundVia`), then by normalised company name after the site confirmed its real name.
+
+## Directories and official domains
+Search results from third-party directories, review sites, job boards and aggregators (The Manifest, GoodFirms, SelectedFirms, Naukri, AmbitionBox, DesignRush, ...) are used only as *discovery hints
+that are discarded*: they are rejected before any request (`rejected_results.csv`: `blocked_domain`, `directory_or_aggregator`, `directory_like_domain`, `directory_listing_path`, ...), so neither the directory
+nor its robots.txt is fetched. Only a company's own domain is visited, official-looking ones first (root/about/contact page, name matching the domain, `.in`). Before a company is accepted its site must
+(1) not read like a listing/review platform and (2) be tied to the company: its name matches the domain, it lists an email on its own domain, or it declares itself an Organization in JSON-LD.
 
 ## Limits and what is not verified
 Search results for "IT company in Pune" include listicles, directories and media; those are rejected with a reason, and what survives depends on the search backend. The yield of *valid Indian B2B
