@@ -163,6 +163,13 @@ python -m leadengine.discovery run  --csv my_candidates.csv          # dry run: 
 Automatic sources: Wikidata (`--wikidata`, CC0) and local OpenStreetMap extracts (`--osm-file`), with a `check-sources` robots.txt preflight; why other sources
 were rejected (closed/paid/terms): **[docs/DISCOVERY_SOURCES.md](docs/DISCOVERY_SOURCES.md)**. Details, commands for Windows and the live run, status and limitations: **[docs/DISCOVERY_ENGINE.md](docs/DISCOVERY_ENGINE.md)**.
 
+### Web-search discovery (search -> validate -> dedupe -> enrich -> export)
+
+`python -m leadengine.discovery.websearch plan|probe|run`: industries x Indian cities x phrasings are searched through a pluggable provider (**SearXNG you run locally: free, no key**; optional metered
+Brave with `LE_BRAVE_API_KEY`; offline `static` replay), each result's own website is visited through the guarded fetcher (robots.txt, challenges never bypassed), publicly listed contact details are
+extracted, duplicates are merged, and the valid companies can be enriched with ScrapeGraphAI + Ollama (`--enrich`). Dry run by default. Details, provider terms, output columns and limits:
+**[docs/WEB_DISCOVERY.md](docs/WEB_DISCOVERY.md)**. Verified with a fake search endpoint and fixture sites only; not yet run against a real search backend.
+
 ### General-purpose end-to-end test (discover ~100 companies in many cities, then profile them)
 
 Uses only existing pieces plus `leadengine.discovery.e2e` (local-file glue: city-balanced selection, the discovery CSV, the summary JSON). No database, no paid API.

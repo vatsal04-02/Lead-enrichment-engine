@@ -64,6 +64,7 @@ class ProfileConfig:
     settings: Optional[Settings] = None
     backend: object = None
     allow_synthetic: bool = False
+    fetcher: object = None             # an already-configured (e.g. memoising) page fetcher shared with web discovery; the runner does not close it
 
 
 def default_output(input_path: Path) -> Path:
@@ -185,7 +186,7 @@ async def run_profiles(cfg: ProfileConfig) -> dict:
         await backend.preflight()                         # BackendUnavailable / BackendConfigError -> caller, before any fetch and before the output exists
     out.parent.mkdir(parents=True, exist_ok=True)
     cols = output_columns(rd.headers)
-    fetcher = Fetcher(base, db=None)
+    fetcher = cfg.fetcher or Fetcher(base, db=None)
     company_timeout = cfg.company_timeout or (cfg.model_timeout * (cfg.retries + 1) + 180)
     counts: dict[str, int] = {}
     totals = {"calls": 0, "tokens_in": 0, "tokens_out": 0, "latency_ms": 0.0, "retries": 0, "timeouts": 0}
@@ -231,7 +232,8 @@ async def run_profiles(cfg: ProfileConfig) -> dict:
                          time.monotonic() - t0, f" - {vals['error']}" if vals.get("error") else "")
                 emit(job, vals)
     finally:
-        await fetcher.aclose()
+        if cfg.fetcher is None:
+            await fetcher.aclose()
         if cfg.backend is None:
             await backend.aclose()
     summary = {"input": str(inp), "output": str(out), "rows": len(jobs), "status_counts": counts, "model": cfg.model, "endpoint": cfg.base_url,
