@@ -163,6 +163,28 @@ python -m leadengine.discovery run  --csv my_candidates.csv          # dry run: 
 Automatic sources: Wikidata (`--wikidata`, CC0) and local OpenStreetMap extracts (`--osm-file`), with a `check-sources` robots.txt preflight; why other sources
 were rejected (closed/paid/terms): **[docs/DISCOVERY_SOURCES.md](docs/DISCOVERY_SOURCES.md)**. Details, commands for Windows and the live run, status and limitations: **[docs/DISCOVERY_ENGINE.md](docs/DISCOVERY_ENGINE.md)**.
 
+### General-purpose end-to-end test (discover ~100 companies in many cities, then profile them)
+
+Uses only existing pieces plus `leadengine.discovery.e2e` (local-file glue: city-balanced selection, the discovery CSV, the summary JSON). No database, no paid API.
+Everything below contacts real hosts, so it is yours to run (PowerShell; `$sg` = your Python>=3.12 with scrapegraphai; Ollama running with `qwen3:4b` pulled):
+
+```powershell
+$env:LE_USER_AGENT = "YourBot/1.0 (+https://your-site/bot; you@your-domain)"; $env:LE_SCRAPEGRAPH_PYTHON = $sg
+python -m leadengine.profiles --check                                       # Ollama + qwen3:4b (loopback only)
+$cities = '--location','Delhi NCR','--location','Mumbai','--location','Pune','--location','Bengaluru','--location','Hyderabad','--location','Chennai',
+          '--location','Kolkata','--location','Ahmedabad','--location','Jaipur','--location','Lucknow','--location','Chandigarh','--location','Indore'
+python -m leadengine.discovery check-sources --wikidata @cities --live --confirm-terms-reviewed --confirm-count 1      # fetches only the robots.txt of query.wikidata.org (1 host)
+python -m leadengine.discovery discover --wikidata @cities --niche "general B2B company" --limit 1000 --out-root discovery_out    # dry run: prints the exact --confirm-count
+python -m leadengine.discovery discover --wikidata @cities --niche "general B2B company" --limit 1000 --out-root discovery_out --live --confirm-terms-reviewed --confirm-count <N>
+python -m leadengine.discovery.e2e prepare discovery_out\<run>\discovery_candidates.csv --target 100 --out-root e2e_out      # -> discovery-<ts>.csv + profile-input-<ts>.csv
+python -m leadengine.profiles e2e_out\<ts>\profile-input-<ts>.csv -o e2e_out\<ts>\enriched-<ts>.csv --max-companies 100 --log-file e2e_out\<ts>\run.log
+python -m leadengine.discovery.e2e summarize --discovery e2e_out\<ts>\discovery-<ts>.csv --enriched e2e_out\<ts>\enriched-<ts>.csv `
+       --profile-summary e2e_out\<ts>\enriched-<ts>.summary.json --out-dir e2e_out\<ts>
+```
+Limits: Wikidata lists *notable* organisations with an official-website statement (not small businesses, and not only companies - review the list), so reaching 100 is not assured; the discovery
+CSV reports the real count and `DiscoveryStatus` says why a row was not selected. Sites behind anti-bot challenges are recorded (`anti_bot_blocked`), never bypassed. If Wikidata's robots.txt
+refuses the engine, `check-sources` says so: use `--osm-file` or `--csv` instead.
+
 ## REST API (`/v1`, optional bearer token `LE_API_TOKEN`)
 
 | route | purpose |
